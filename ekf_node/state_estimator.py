@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from .ekf import EKF
 
 from std_msgs.msg import String
 
@@ -14,6 +15,8 @@ class StateEstimator(Node):
             self.listener_callback,
             10)
         self.subscription  # prevent unused variable warning
+
+        self.ekf = EKF()
 
     def listener_callback(self, msg):
         self.get_logger().info('I heard: "%s"' % msg.data)
