@@ -20,11 +20,12 @@ class EKF(object):
         delta = u[1] #wheel angle (float)
  
         beta = np.arctan(np.tan(delta) / 2)  # slip angle (difference between wheel angle and car angle)
+        theta = self.state[2, 0]
 
         # Update state (using floats)
-        self.state[0, 0] += v * np.cos(beta) * dt  # x
-        self.state[1, 0] += v * np.sin(beta) * dt  # y
-        self.state[2, 0] += (v / self.wheelbase) * np.tan(beta) * dt  # theta i.e. Heading angle
+        self.state[0, 0] += v * np.cos(theta + beta) * dt  # x   only beta
+        self.state[1, 0] += v * np.sin(theta + beta) * dt  # y   only beta
+        self.state[2, 0] += (v / self.wheelbase) * np.tan(delta) * dt  # theta i.e. Heading angle    beta
         self.state[3, 0] = v  # Velocity from control input
 
         # Normalize theta, maybe not needed
