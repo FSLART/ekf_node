@@ -1,6 +1,5 @@
 import numpy as np
 import time
-from numba import njit, float64, int64
 
 class EKF(object):
     def __init__(self, initial_state, initial_covariance, noise, wheelbase):
