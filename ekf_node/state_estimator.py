@@ -12,6 +12,12 @@ class StateEstimator(Node):
     def __init__(self):
         super().__init__('state_estimator')
 
+        # Constants
+        lart_pi = 3.14159265358979323846 
+        tire_radius = 0.255  
+        self.tire_perimeter = 2.0 * lart_pi * tire_radius 
+        self.transmission_ratio = 4.0  
+
         # Declare parameters
         self.declare_parameter('dynamics_cmd_topic','pc_origin/dynamics')
         self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
@@ -36,8 +42,10 @@ class StateEstimator(Node):
         self.ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
 
     def dynamics_callback(self, msg):
+        # Calculate the rpm to m/s
+        ms_speed = self.tire_perimeter * (msg.rpm/self.transmission_ratio/60.0)
         # Predict the next state
-        control_input = np.array([msg.rpm, msg.steering_angle], dtype=np.float64)
+        control_input = np.array([ms_speed, msg.steering_angle], dtype=np.float64)
         self.ekf.predict(control_input)
         # publish the new state
         self.gns_publish()
