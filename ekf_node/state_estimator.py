@@ -34,14 +34,12 @@ class StateEstimator(Node):
         gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
         self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
 
-        # Inititalize the EKF
-        initial_state = np.array([[0.0], [0.0], [0.0], [0.0]])  # Float dtype
-        initial_covariance = np.eye(4) * (0.1**2)
-        process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
-        wheelbase = 1.55
-        self.ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
+        # Define
+        self.ekf = None
 
     def dynamics_callback(self, msg):
+        if(self.ekf is None):
+            self.intialize_ekf()
         # Calculate the rpm to m/s
         ms_speed = self.tire_perimeter * (msg.rpm/self.transmission_ratio/60.0)
         # Predict the next state
@@ -52,6 +50,8 @@ class StateEstimator(Node):
         self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
 
     def dynamics_update_callback(self, msg):
+        if(self.ekf is None):
+            self.intialize_ekf()
         # Calculate the speed from the GNSSINS message
         # and update the EKF with the new measurement
         speed = math.sqrt(msg.velocity.x**2 + msg.velocity.y**2)
@@ -73,6 +73,13 @@ class StateEstimator(Node):
         # Publish the GNSSINS message
         self.publisher_.publish(gnssins_msg)
 
+    def intialize_ekf(self):
+        # Initialize the EKF with the initial state and covariance
+        initial_state = np.array([[0.0], [0.0], [0.0], [0.0]])  # Float dtype
+        initial_covariance = np.eye(4) * (0.1**2)
+        process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
+        wheelbase = 1.55
+        self.ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
 
 def main(args=None):
     rclpy.init(args=args)
