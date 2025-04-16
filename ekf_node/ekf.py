@@ -65,23 +65,23 @@ class EKF(object):
 
 # Example Usage with Float Initial State
 
-if __name__ == "__main__" :
-    initial_state = np.array([[0.0], [0.0], [0.0], [0.0]])  # Float dtype
-    initial_covariance = np.eye(4) * (0.1**2)
-    process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
-    wheelbase = 1.55
+# if __name__ == "__main__" :
+#     initial_state = np.array([[0.0], [0.0], [0.0], [0.0]])  # Float dtype
+#     initial_covariance = np.eye(4) * (0.1**2)
+#     process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
+#     wheelbase = 1.55
 
-    ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
+#     ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
 
-    time.sleep(0.1)
-    control_input = np.array([1.0, 0.1], dtype=np.float64)
+#     time.sleep(0.1)
+#     control_input = np.array([1.0, 0.1], dtype=np.float64)
 
-    measurement = np.array([[0.16], [0.05], [0.0064732], [0.95]], dtype=np.float64)
-    measurement_noise = np.eye(4) * 0.005
-    ekf.predict(control_input)
-    print("State before update:\n", ekf.state)
-    print(f"time:{time.time()-ekf.last_time}")
-    time.sleep(0.1)
-    ekf.update(measurement, measurement_noise)
-    print("State after update:\n", ekf.state)
-    print(f"time:{time.time()-ekf.last_time}")
+#     measurement = np.array([[0.16], [0.05], [0.0064732], [0.95]], dtype=np.float64)
+#     measurement_noise = np.eye(4) * 0.005
+#     ekf.predict(control_input)
+#     print("State before update:\n", ekf.state)
+#     print(f"time:{time.time()-ekf.last_time}")
+#     time.sleep(0.1)
+#     ekf.update(measurement, measurement_noise)
+#     print("State after update:\n", ekf.state)
+#     print(f"time:{time.time()-ekf.last_time}")
