@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/ekf_node/launch', ['launch/launch_ekf.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -17,9 +18,10 @@ setup(
     maintainer_email='tomasmarcelinosantos@gmail.com',
     description='TODO: Package description',
     license='Apache-2.0',
-    tests_require=['pytest'],
+    #tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'ekf_node = ekf_node.state_estimator:main'
         ],
     },
 )

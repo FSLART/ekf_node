@@ -41,6 +41,7 @@ class StateEstimator(Node):
         self.ekf.predict(control_input)
         # publish the new state
         self.gns_publish()
+        self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
 
     def dynamics_update_callback(self, msg):
         # Calculate the speed from the GNSSINS message
@@ -63,7 +64,6 @@ class StateEstimator(Node):
         gnssins_msg.velocity.z = 0.0
         # Publish the GNSSINS message
         self.publisher_.publish(gnssins_msg)
-
 
 
 def main(args=None):
