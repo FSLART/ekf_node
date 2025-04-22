@@ -4,6 +4,7 @@ import numpy as np
 import math
 from .ekf import EKF
 from lart_msgs.msg import DynamicsCMD, GNSSINS
+from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped
 
 import matplotlib.pyplot as plt
 import time
@@ -36,13 +37,13 @@ class StateEstimator(Node):
         self.transmission_ratio = 4.0  
 
         # Declare parameters
-        self.declare_parameter('dynamics_cmd_topic','pc_origin/dynamics')
+        self.declare_parameter('dynamics_cmd_topic','/cmd')
         self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
         self.declare_parameter('gnssins_topic','/only/god/knows/two') # TODO: this is a placeholder, change it to the correct topic
 
         # Create subcriptions
         dynamics_cmd_topic = self.get_parameter('dynamics_cmd_topic').get_parameter_value().string_value
-        self.dynamics_sub = self.create_subscription(DynamicsCMD, dynamics_cmd_topic, self.dynamics_callback, 10)
+        self.dynamics_sub = self.create_subscription(AckermannDriveStamped, dynamics_cmd_topic, self.dynamics_callback, 10)
 
         dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
         self.rpm_sub = self.create_subscription(GNSSINS, dynamics_update_topic, self.dynamics_update_callback, 10)
@@ -58,14 +59,14 @@ class StateEstimator(Node):
         if(self.ekf is None):
             self.intialize_ekf()
         # Calculate the rpm to m/s
-        ms_speed = self.tire_perimeter * (msg.rpm/self.transmission_ratio/60.0)
+        ms_speed = msg.drive.speed
         
         #print steering angle from the spac
-        steering_angle_degrees = math.degrees(msg.steering_angle)
+        steering_angle_degrees = math.degrees(msg.drive.steering_angle)
         steering_angle_degrees = round(steering_angle_degrees, 3)
         self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
 
-        steering_angle = msg.steering_angle
+        steering_angle = msg.drive.steering_angle
         # if steering_angle_degrees < 5:
         #     steering_angle = 0.0
 
