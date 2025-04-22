@@ -5,7 +5,24 @@ import math
 from .ekf import EKF
 from lart_msgs.msg import DynamicsCMD, GNSSINS
 
+import matplotlib.pyplot as plt
+import time
 
+plt.ion()  # Enable interactive mode
+fig, ax = plt.subplots()
+sc, = ax.plot([], [], 'bo')  # 'bo' for blue dots
+line, = ax.plot([], [], 'b-')  # line to show trajectory
+ax.set_xlim(-10, 10)  # You can adjust these as needed
+ax.set_ylim(-10, 10)
+ax.set_xlabel("State[1] (y)")
+ax.set_ylabel("State[0] (x)")
+ax.set_title("EKF Trajectory")
+ax.xaxis.set_inverted(True)  # Invert x-axis
+ax.grid(True)
+ax.axis('equal')
+
+x_vals = []
+y_vals = []
 
 class StateEstimator(Node):
 
@@ -42,9 +59,37 @@ class StateEstimator(Node):
             self.intialize_ekf()
         # Calculate the rpm to m/s
         ms_speed = self.tire_perimeter * (msg.rpm/self.transmission_ratio/60.0)
+        
+        #print steering angle from the spac
+        steering_angle_degrees = math.degrees(msg.steering_angle)
+        steering_angle_degrees = round(steering_angle_degrees, 3)
+        self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
+
+        steering_angle = msg.steering_angle
+        # if steering_angle_degrees < 5:
+        #     steering_angle = 0.0
+
         # Predict the next state
-        control_input = np.array([ms_speed, msg.steering_angle], dtype=np.float64)
+        #control_input = np.array([ms_speed, msg.steering_angle], dtype=np.float64)
+        control_input = np.array([ms_speed, steering_angle], dtype=np.float64)
         self.ekf.predict(control_input)
+
+        #write data to a file
+        file = open("ekf_log.txt", "w")
+        file.write(f"{self.ekf.state[0]},{self.ekf.state[1]},{self.ekf.state[2]}\n")
+
+        #plot the trajectory
+        x_vals.append(float(self.ekf.state[0]))
+        y_vals.append(float(-self.ekf.state[1]))
+
+        sc.set_data(y_vals, x_vals)
+        line.set_data(y_vals, x_vals)
+        ax.relim()
+        ax.autoscale_view()
+        
+        plt.draw()
+        plt.pause(0.1)
+
         # publish the new state
         self.gns_publish()
         self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")

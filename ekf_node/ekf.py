@@ -17,15 +17,15 @@ class EKF(object):
         self.last_time = current_time
 
         v = u[0]  # Control input velocity (float)
-        delta = u[1] #wheel angle (float)
+        delta = -u[1] #wheel angle (float) 
  
         beta = np.arctan(np.tan(delta) / 2)  # slip angle (difference between wheel angle and car angle)
         theta = self.state[2, 0]
 
         # Update state (using floats)
-        self.state[0, 0] += v * np.cos(theta + beta) * dt  # x   only beta
-        self.state[1, 0] += v * np.sin(theta + beta) * dt  # y   only beta
-        self.state[2, 0] += (v / self.wheelbase) * np.tan(delta) * dt  # theta i.e. Heading angle    beta
+        self.state[0, 0] += v * np.cos(theta + beta) * dt  # x   
+        self.state[1, 0] += v * np.sin(theta + beta) * dt  # y 
+        self.state[2, 0] += (v / self.wheelbase) * np.tan(delta) * dt  # theta i.e. Heading angle
         self.state[3, 0] = v  # Velocity from control input
 
         # Normalize theta, maybe not needed
@@ -49,6 +49,7 @@ class EKF(object):
 
         # Predict covariance
         self.P = F @ self.P @ F.T + R
+        
 
     def update(self, z, R):
         '''z has the same format as the state array (x,y,theta,v)'''
