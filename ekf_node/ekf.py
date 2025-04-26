@@ -17,7 +17,7 @@ class EKF(object):
         self.last_time = current_time
 
         v = u[0]  # Control input velocity (float)
-        delta = -u[1] #wheel angle (float) 
+        delta = u[1] #wheel angle (float) 
  
         beta = np.arctan(np.tan(delta) / 2)  # slip angle (difference between wheel angle and car angle)
         theta = self.state[2, 0]

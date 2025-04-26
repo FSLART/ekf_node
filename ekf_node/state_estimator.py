@@ -5,6 +5,10 @@ import math
 from .ekf import EKF
 from lart_msgs.msg import DynamicsCMD, GNSSINS
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped
+from sensor_msgs.msg import Imu, NavSatFix #from the simuator
+from eufs_msgs.msg import WheelSpeedsStamped # from the simulator
+from message_filters import Subscriber, ApproximateTimeSynchronizer
+import tf2_py
 
 import matplotlib.pyplot as plt
 import time
@@ -13,6 +17,7 @@ plt.ion()  # Enable interactive mode
 fig, ax = plt.subplots()
 sc, = ax.plot([], [], 'bo')  # 'bo' for blue dots
 line, = ax.plot([], [], 'b-')  # line to show trajectory
+br, = ax.plot([], [], 'ro')  # red dots for cones
 ax.set_xlim(-10, 10)  # You can adjust these as needed
 ax.set_ylim(-10, 10)
 ax.set_xlabel("State[1] (y)")
@@ -24,6 +29,22 @@ ax.axis('equal')
 
 x_vals = []
 y_vals = []
+
+
+# Read the CSV file of the track
+file = open("/home/tomas/ros2_ws/src/eufs_sim/eufs_tracks/csv/small_track.csv", "r") #TODO: change to the correct file
+
+lin = file.readlines()
+
+x_cones = []
+y_cones = []
+lin.pop(0)  # Remove the first line
+for l in lin:
+    l = l.split(",")
+    x_cones.append(float(l[1]))
+    y_cones.append(float(l[2]))
+
+file.close()
 
 class StateEstimator(Node):
 
@@ -48,12 +69,57 @@ class StateEstimator(Node):
         dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
         self.rpm_sub = self.create_subscription(GNSSINS, dynamics_update_topic, self.dynamics_update_callback, 10)
 
+        # Create message_filters subscribers
+        self.imu_sub = Subscriber(self, Imu, '/imuAAAA') # Wrong topic, should be /imu
+        #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
+        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speedsAAAA') # Wrong topic, should be /ground_truth/wheel_speeds
+
+        # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
+        self.ts = ApproximateTimeSynchronizer(
+            [self.imu_sub, self.speed_sub],
+            queue_size=10,
+            slop=0.2  # seconds of allowed timestamp difference
+        )
+
+        self.ts.registerCallback(self.get_gnssisns)
+
         # Create publisher
         gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
         self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
 
         # Define
         self.ekf = None
+
+
+    def get_gnssisns(self, imu_msg, speed_msg):
+        
+        
+        # Convert lat/lon to position in x and y
+        # lat = gps_msg.latitude
+        # lon = gps_msg.longitude
+        # x, y = utm(lon, lat)
+        # self.get_logger().info(f"GPS: {gps_msg.latitude}, {gps_msg.longitude}, LAT: {lat}, LON: {lon}")
+
+        speed = ((speed_msg.speeds.lb_speed + speed_msg.speeds.rb_speed)/2) / 37.8188
+
+        q = imu_msg.orientation
+
+        roll, pitch, yaw = tf2_py.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+
+        self.get_logger().info(f"IMU: {yaw}, SPEED: {speed} ")
+
+        # Create a new GNSSINS message
+        gnssins_msg = GNSSINS()
+        gnssins_msg.position.x = 0.0
+        gnssins_msg.position.y = 0.0
+        gnssins_msg.heading = yaw
+        gnssins_msg.velocity.x = speed
+        gnssins_msg.velocity.y = 0.0
+        gnssins_msg.velocity.z = 0.0
+
+        # Call the update callback with the new message
+        self.dynamics_update_callback(gnssins_msg)
+
 
     def dynamics_callback(self, msg):
         if(self.ekf is None):
@@ -76,13 +142,14 @@ class StateEstimator(Node):
         self.ekf.predict(control_input)
 
         #write data to a file
-        file = open("ekf_log.txt", "w")
-        file.write(f"{self.ekf.state[0]},{self.ekf.state[1]},{self.ekf.state[2]}\n")
+        # file = open("ekf_log.txt", "w")
+        # file.write(f"{self.ekf.state[0]},{self.ekf.state[1]},{self.ekf.state[2]}\n")
 
         #plot the trajectory
         x_vals.append(float(self.ekf.state[0]))
-        y_vals.append(float(-self.ekf.state[1]))
+        y_vals.append(float(self.ekf.state[1]))
 
+        br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
         ax.relim()
@@ -100,8 +167,13 @@ class StateEstimator(Node):
             self.intialize_ekf()
         # Calculate the speed from the GNSSINS message
         # and update the EKF with the new measurement
-        speed = math.sqrt(msg.velocity.x**2 + msg.velocity.y**2)
-        measurement = np.array([[msg.position.x], [msg.position.y], [msg.heading], [speed]], dtype=np.float64)
+        # speed = math.sqrt(msg.velocity.x**2 + msg.velocity.y**2)
+        
+        speed = msg.velocity.x # AXANATO
+        
+        print(f"GNSSINS: {msg.position.x}, {msg.position.y}, {msg.heading}, {speed}")
+
+        measurement = np.array([[self.ekf.state[0,0]], [self.ekf.state[1,0]], [msg.heading], [speed]], dtype=np.float64)
         measurement_noise = np.eye(4) * 0.005
         self.ekf.update(measurement, measurement_noise)
         # publish the new state
@@ -121,11 +193,12 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[0.0], [0.0], [0.0], [0.0]])  # Float dtype
+        initial_state = np.array([[-13.0], [10.3], [0.0], [0.0]])  # Float dtype
         initial_covariance = np.eye(4) * (0.1**2)
         process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
         wheelbase = 1.55
         self.ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
+
 
 def main(args=None):
     rclpy.init(args=args)
