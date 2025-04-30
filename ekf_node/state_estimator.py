@@ -8,7 +8,6 @@ from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped
 from sensor_msgs.msg import Imu, NavSatFix #from the simuator
 from eufs_msgs.msg import WheelSpeedsStamped # from the simulator
 from message_filters import Subscriber, ApproximateTimeSynchronizer
-import tf2_py
 
 import matplotlib.pyplot as plt
 import time
@@ -56,6 +55,7 @@ class StateEstimator(Node):
         tire_radius = 0.255  
         self.tire_perimeter = 2.0 * lart_pi * tire_radius 
         self.transmission_ratio = 4.0  
+        self.previous_yaw = 0.0
 
         # Declare parameters
         self.declare_parameter('dynamics_cmd_topic','/cmd')
@@ -70,9 +70,9 @@ class StateEstimator(Node):
         self.rpm_sub = self.create_subscription(GNSSINS, dynamics_update_topic, self.dynamics_update_callback, 10)
 
         # Create message_filters subscribers
-        self.imu_sub = Subscriber(self, Imu, '/imuAAAA') # Wrong topic, should be /imu
+        self.imu_sub = Subscriber(self, Imu, '/imu')
         #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
-        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speedsAAAA') # Wrong topic, should be /ground_truth/wheel_speeds
+        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')
 
         # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
         self.ts = ApproximateTimeSynchronizer(
@@ -102,17 +102,23 @@ class StateEstimator(Node):
 
         speed = ((speed_msg.speeds.lb_speed + speed_msg.speeds.rb_speed)/2) / 37.8188
 
-        q = imu_msg.orientation
+        current_yaw = 2 * math.atan2(imu_msg.orientation.z, imu_msg.orientation.w)
 
-        roll, pitch, yaw = tf2_py.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+        # delta = current_yaw - self.previous_yaw
+        # delta = np.arctan2(np.sin(delta), np.cos(delta))
 
-        self.get_logger().info(f"IMU: {yaw}, SPEED: {speed} ")
+        current_yaw = (current_yaw + np.pi) % (2 * np.pi) - np.pi
+
+
+        #heading = math.radians(yaw)
+
+        #self.get_logger().info(f"IMU: {yaw}, SPEED: {speed} ")
 
         # Create a new GNSSINS message
         gnssins_msg = GNSSINS()
         gnssins_msg.position.x = 0.0
         gnssins_msg.position.y = 0.0
-        gnssins_msg.heading = yaw
+        gnssins_msg.heading = current_yaw
         gnssins_msg.velocity.x = speed
         gnssins_msg.velocity.y = 0.0
         gnssins_msg.velocity.z = 0.0
@@ -130,7 +136,7 @@ class StateEstimator(Node):
         #print steering angle from the spac
         steering_angle_degrees = math.degrees(msg.drive.steering_angle)
         steering_angle_degrees = round(steering_angle_degrees, 3)
-        self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
+        #self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
 
         steering_angle = msg.drive.steering_angle
         # if steering_angle_degrees < 5:
@@ -160,7 +166,7 @@ class StateEstimator(Node):
 
         # publish the new state
         self.gns_publish()
-        self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
+        #self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
 
     def dynamics_update_callback(self, msg):
         if(self.ekf is None):
@@ -170,8 +176,9 @@ class StateEstimator(Node):
         # speed = math.sqrt(msg.velocity.x**2 + msg.velocity.y**2)
         
         speed = msg.velocity.x # AXANATO
-        
-        print(f"GNSSINS: {msg.position.x}, {msg.position.y}, {msg.heading}, {speed}")
+
+        self.get_logger().info(f"Predicted state: {self.ekf.state[2,0]}")
+        self.get_logger().info(f"SIMULADOR: {msg.heading}")
 
         measurement = np.array([[self.ekf.state[0,0]], [self.ekf.state[1,0]], [msg.heading], [speed]], dtype=np.float64)
         measurement_noise = np.eye(4) * 0.005

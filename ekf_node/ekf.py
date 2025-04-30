@@ -10,6 +10,7 @@ class EKF(object):
         self.wheelbase = wheelbase
         self.last_time = time.time()
 
+
     def predict(self, u):
         current_time = time.time()
         dt = current_time - self.last_time
@@ -27,6 +28,7 @@ class EKF(object):
         self.state[1, 0] += v * np.sin(theta + beta) * dt  # y 
         self.state[2, 0] += (v / self.wheelbase) * np.tan(delta) * dt  # theta i.e. Heading angle
         self.state[3, 0] = v  # Velocity from control input
+
 
         # Normalize theta, maybe not needed
         self.state[2, 0] = (self.state[2, 0] + np.pi) % (2 * np.pi) - np.pi
