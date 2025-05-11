@@ -27,37 +27,42 @@ class EKF(object):
         self.state[0, 0] += v * np.cos(theta + beta) * dt  # x   
         self.state[1, 0] += v * np.sin(theta + beta) * dt  # y 
         self.state[2, 0] += (v / self.wheelbase) * np.tan(delta) * dt  # theta i.e. Heading angle
-        self.state[3, 0] = v  # Velocity from control input
+        #self.state[3, 0] = v  # Velocity from control input
 
 
         # Normalize theta, maybe not needed
         self.state[2, 0] = (self.state[2, 0] + np.pi) % (2 * np.pi) - np.pi
 
         # Jacobian F
-        F = np.eye(4, dtype=np.float64)
-        F[0, 2] = -v * np.sin(beta) * dt
-        F[1, 2] = v * np.cos(beta) * dt
-        F[2, 3] = 0  # Theta does not depend on previous velocity
+        F = np.eye(3, dtype=np.float64) #changed from 4x4
+        F[0, 2] = -v * np.sin(theta + beta) * dt #beta
+        F[1, 2] = v * np.cos(theta + beta) * dt #beta
+        #F[2, 3] = 0  # Theta does not depend on previous velocity
 
         # Noise Jacobian G
+        # G = np.array([
+        #     [np.cos(beta) * dt, 0],
+        #     [np.sin(beta) * dt, 0],
+        #     [(np.tan(beta) / self.wheelbase) * dt, (v / (self.wheelbase * np.cos(beta)**2) * dt)],
+        #     [1, 0]], dtype=np.float64)
+
         G = np.array([
-            [np.cos(beta) * dt, 0],
-            [np.sin(beta) * dt, 0],
-            [(np.tan(beta) / self.wheelbase) * dt, (v / (self.wheelbase * np.cos(beta)**2) * dt)],
-            [1, 0]], dtype=np.float64)
+            [np.cos(beta) * dt],
+            [np.sin(beta) * dt],
+            [(np.tan(beta) / self.wheelbase) * dt]], dtype=np.float64)
 
         # Process noise covariance
-        R = G @ self.noise @ G.T
+        # R = G @ self.noise @ G.T
 
         # Predict covariance
-        self.P = F @ self.P @ F.T + R
+        self.P = (F @ self.P @ F.T) + (G @ self.noise @ G.T) # + R
         
 
     def update(self, z, R):
         '''z has the same format as the state array (x,y,theta,v)'''
         z_pred = self.state.copy() #state from the prediction step
         y = z - z_pred #current state - predicted state
-        H = np.eye(4, dtype=np.float64) # identity matrix because the state array is the same as the measurement
+        H = np.eye(3, dtype=np.float64) # identity matrix because the state array is the same as the measurement # USED TO BE 4!
         S = H @ self.P @ H.T + R # identity * the covariance matrix * the transposed of the identity + the measurement noise
         K = self.P @ H.T @ np.linalg.inv(S) # covariance * identity transposed * inverse of the previous calculation
         self.state += K @ y  # add to the state the kalman gain * the difference between the measurement and the predicted state
