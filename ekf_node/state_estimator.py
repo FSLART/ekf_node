@@ -10,6 +10,7 @@ from eufs_msgs.msg import WheelSpeedsStamped # from the simulator
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 import time
 
+from geometry_msgs.msg import Vector3Stamped
 import matplotlib.pyplot as plt
 import time
 
@@ -63,40 +64,40 @@ class StateEstimator(Node):
         # self.last_time = time.time()
 
 
-        # Declare parameters
-        self.declare_parameter('dynamics_cmd_topic','/cmd')
-        self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
-        self.declare_parameter('gnssins_topic','/ekf/state') # TODO: this is a placeholder, change it to the correct topic
+        # # Declare parameters
+        # self.declare_parameter('dynamics_cmd_topic','/pc_origin/dynamics')
+        # self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
+        #self.declare_parameter('gnssins_topic','/ekf/state') # TODO: this is a placeholder, change it to the correct topic
 
-        # Create subcriptions
-        dynamics_cmd_topic = self.get_parameter('dynamics_cmd_topic').get_parameter_value().string_value
-        self.dynamics_sub = self.create_subscription(AckermannDriveStamped, dynamics_cmd_topic, self.dynamics_callback, 100)
+        # # Create subcriptions
+        # dynamics_cmd_topic = self.get_parameter('dynamics_cmd_topic').get_parameter_value().string_value
+        # self.dynamics_sub = self.create_subscription(DynamicsCMD, dynamics_cmd_topic, self.dynamics_callback, 100)
 
-        dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
-        self.rpm_sub = self.create_subscription(GNSSINS, dynamics_update_topic, self.dynamics_update_callback, 10)
-
+        # dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
+        #self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
+        
         # Create message_filters subscribers
-        self.imu_sub = Subscriber(self, Imu, '/imu')
+        self.imu_sub = Subscriber(self, Imu, '/imu') #imu
         #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
-        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')
+        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')#/ground_truth/wheel_speeds
 
         # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
         self.ts = ApproximateTimeSynchronizer(
             [self.imu_sub, self.speed_sub],
             queue_size=10,
-            slop=0.2  # seconds of allowed timestamp difference
+            slop=0.5  # seconds of allowed timestamp difference
         )
 
-        self.ts.registerCallback(self.get_gnssisns)
+        self.ts.registerCallback(self.predict_callback)
 
         # Create publisher
-        gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
-        self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
+        # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
+        # self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
 
         # Define
         self.ekf = None
 
-
+    '''
     def get_gnssisns(self, imu_msg, speed_msg):
         
         
@@ -131,13 +132,14 @@ class StateEstimator(Node):
 
         # Call the update callback with the new message
         self.dynamics_update_callback(gnssins_msg)
+    
 
 
     def dynamics_callback(self, msg):
         if(self.ekf is None):
             self.intialize_ekf()
         # Calculate the rpm to m/s
-        ms_speed = msg.drive.speed
+        ms_speed = msg.rpm
 
         # #Check the frequency
         # current_time = time.time()
@@ -151,7 +153,7 @@ class StateEstimator(Node):
         # steering_angle_degrees = round(steering_angle_degrees, 3)
         #self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
 
-        steering_angle = msg.drive.steering_angle
+        steering_angle = msg.steering_angle
         # if steering_angle_degrees < 5:
         #     steering_angle = 0.0
 
@@ -180,6 +182,39 @@ class StateEstimator(Node):
         # publish the new state
         self.gns_publish()
         #self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
+    '''
+
+    def predict_callback(self, imu_msg, v_msg):
+        if(self.ekf is None):
+            self.intialize_ekf()
+        
+        # Get current velocity
+        #v = ((v_msg.speeds.lb_speed + v_msg.speeds.rb_speed)/2) / 37.8188
+
+        # velocidade
+        v = ((v_msg.speeds.lb_speed + v_msg.speeds.rb_speed)/2) / 37.8188
+
+        # Get current angular velocity from IMU
+        omega_z = imu_msg.vector.z
+
+        self.get_logger().info(f"IMU: {omega_z} SPEED: {v} ")
+
+        # Call the predict method of the EKF
+        self.ekf.predict(v, omega_z)
+
+        #plot the trajectory
+        x_vals.append(float(self.ekf.state[0]))
+        y_vals.append(float(self.ekf.state[1]))
+
+        br.set_data(y_cones, x_cones)
+        sc.set_data(y_vals, x_vals)
+        line.set_data(y_vals, x_vals)
+        ax.relim()
+        ax.autoscale_view()
+        
+        plt.draw()
+        plt.pause(0.001)
+
 
     def dynamics_update_callback(self, msg):
         if(self.ekf is None):
@@ -220,10 +255,10 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[-13.0], [10.3], [0.0]])  # Float dtype
-        initial_covariance = np.eye(3) * (0.1**2) #changed from 4x4
-        # process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
-        process_noise = np.diag([0.1**2]).astype(np.float64)
+        initial_state = np.array([[-13.0], [10.3], [0.0], [0.0],[0.0]])  # Float dtype
+        initial_covariance = np.eye(5) * (0.1**2) #changed from 4x4
+        process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
+        #process_noise = np.diag([0.1**2]).astype(np.float64)
         wheelbase = 1.55
         self.ekf = EKF(initial_state, initial_covariance, process_noise, wheelbase)
 
