@@ -188,14 +188,11 @@ class StateEstimator(Node):
         if(self.ekf is None):
             self.intialize_ekf()
         
-        # Get current velocity
-        #v = ((v_msg.speeds.lb_speed + v_msg.speeds.rb_speed)/2) / 37.8188
-
-        # velocidade
+        #Get current velocity
         v = ((v_msg.speeds.lb_speed + v_msg.speeds.rb_speed)/2) / 37.8188
 
         # Get current angular velocity from IMU
-        omega_z = imu_msg.vector.z
+        omega_z = imu_msg.angular_velocity.z
 
         self.get_logger().info(f"IMU: {omega_z} SPEED: {v} ")
 

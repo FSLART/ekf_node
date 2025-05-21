@@ -18,14 +18,23 @@ class EKF(object):
         current_time = time.time()
         dt = current_time - self.last_time
         self.last_time = current_time
+        
         # Getting the state
         theta = self.state[2, 0]  # Robot heading
+        
         # Update state estimate mu with model
         state_model_mat = np.zeros((3,1)) # Initialize state update matrix from model
 
         state_model_mat[0] = -(v/w)*np.sin(theta)+(v/w)*np.sin(theta+w*dt) if w>0.01 else v*np.cos(theta)*dt # Update in the robot x position
         state_model_mat[1] = (v/w)*np.cos(theta)-(v/w)*np.cos(theta+w*dt) if w>0.01 else v*np.sin(theta)*dt # Update in the robot y position
         state_model_mat[2] = w*dt # Update for robot heading theta
+
+        # Update the state
+        self.state[0] += state_model_mat[0] # Update in the robot x position
+        self.state[1] += state_model_mat[1] # Update in the robot y position
+        self.state[2] += state_model_mat[2] # Update for robot heading theta
+        self.state[2] = (self.state[2] + np.pi) % (2 * np.pi) - np.pi # Normalize theta to be between -pi and pi
+        
         '''
         # Jacobian F
         F = np.eye(3, dtype=np.float64)
