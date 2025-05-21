@@ -252,7 +252,7 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[-13.0], [10.3], [0.0], [0.0],[0.0]])  # Float dtype
+        initial_state = np.array([[-13.0], [10.3], [0.0]])  # Float dtype
         initial_covariance = np.eye(5) * (0.1**2) #changed from 4x4
         process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
         #process_noise = np.diag([0.1**2]).astype(np.float64)

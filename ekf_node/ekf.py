@@ -30,9 +30,7 @@ class EKF(object):
         state_model_mat[2] = w*dt # Update for robot heading theta
 
         # Update the state
-        self.state[0] += state_model_mat[0] # Update in the robot x position
-        self.state[1] += state_model_mat[1] # Update in the robot y position
-        self.state[2] += state_model_mat[2] # Update for robot heading theta
+        self.state = self.state + np.matmul(np.transpose(self.Fx),state_model_mat) # Update state estimate, simple use model with current state estimate
         self.state[2] = (self.state[2] + np.pi) % (2 * np.pi) - np.pi # Normalize theta to be between -pi and pi
         
         '''
