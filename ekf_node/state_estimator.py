@@ -195,7 +195,7 @@ class StateEstimator(Node):
         self.get_logger().info(f"heading: {self.ekf.state[2]} ")
 
         # Call the predict method of the EKF
-        self.ekf.predict(0.6, omega_z)
+        self.ekf.predict(0.5, omega_z)
 
         #plot the trajectory
         x_vals.append(float(self.ekf.state[0]))
