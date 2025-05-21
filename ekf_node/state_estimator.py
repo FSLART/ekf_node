@@ -74,7 +74,7 @@ class StateEstimator(Node):
         # self.dynamics_sub = self.create_subscription(DynamicsCMD, dynamics_cmd_topic, self.dynamics_callback, 100)
 
         # dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
-        #self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
+        self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
         
         # Create message_filters subscribers
         self.imu_sub = Subscriber(self, Imu, '/imu') #imu
@@ -183,6 +183,32 @@ class StateEstimator(Node):
         self.gns_publish()
         #self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
     '''
+
+    def axanato_callback(self, msg):
+        if(self.ekf is None):
+            self.intialize_ekf()
+        
+        # Get current angular velocity from IMU
+        omega_z = msg.vector.z
+
+        self.get_logger().info(f"IMU: {omega_z} ")
+
+        # Call the predict method of the EKF
+        self.ekf.predict(0, omega_z)
+
+        #plot the trajectory
+        x_vals.append(float(self.ekf.state[0]))
+        y_vals.append(float(self.ekf.state[1]))
+
+        br.set_data(y_cones, x_cones)
+        sc.set_data(y_vals, x_vals)
+        line.set_data(y_vals, x_vals)
+        ax.relim()
+        ax.autoscale_view()
+        
+        plt.draw()
+        plt.pause(0.001)
+
 
     def predict_callback(self, imu_msg, v_msg):
         if(self.ekf is None):
