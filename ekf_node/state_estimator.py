@@ -32,13 +32,12 @@ x_vals = []
 y_vals = []
 
 
+'''
 # Read the CSV file of the track
 file = open("/home/tomas/ros2_ws/src/eufs_sim/eufs_tracks/csv/small_track.csv", "r") #TODO: change to the correct file
 
 lin = file.readlines()
 
-x_cones = []
-y_cones = []
 lin.pop(0)  # Remove the first line
 for l in lin:
     l = l.split(",")
@@ -46,7 +45,7 @@ for l in lin:
     y_cones.append(float(l[2]))
 
 file.close()
-
+'''
 
 class StateEstimator(Node):
 
@@ -75,11 +74,11 @@ class StateEstimator(Node):
 
         # dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
         self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
-        
+        '''
         # Create message_filters subscribers
-        self.imu_sub = Subscriber(self, Imu, '/imu') #imu
+        self.imu_sub = Subscriber(self, Imu, '/imua') #imu
         #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
-        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')#/ground_truth/wheel_speeds
+        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speedsa')#/ground_truth/wheel_speeds
 
         # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
         self.ts = ApproximateTimeSynchronizer(
@@ -89,6 +88,7 @@ class StateEstimator(Node):
         )
 
         self.ts.registerCallback(self.predict_callback)
+        '''
 
         # Create publisher
         # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
@@ -192,15 +192,16 @@ class StateEstimator(Node):
         omega_z = msg.vector.z
 
         self.get_logger().info(f"IMU: {omega_z} ")
+        self.get_logger().info(f"heading: {self.ekf.state[2]} ")
 
         # Call the predict method of the EKF
-        self.ekf.predict(0, omega_z)
+        self.ekf.predict(0.6, omega_z)
 
         #plot the trajectory
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
 
-        br.set_data(y_cones, x_cones)
+        #br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
         ax.relim()
@@ -278,7 +279,8 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[-13.0], [10.3], [0.0]])  # Float dtype
+        #initial_state = np.array([[-13.0], [10.3], [0.0]])  # Float dtype
+        initial_state = np.array([[0.0], [0.0], [0.0]])  # Float dtype
         initial_covariance = np.eye(5) * (0.1**2) #changed from 4x4
         process_noise = np.diag([0.1**2, 0.1**2]).astype(np.float64)
         #process_noise = np.diag([0.1**2]).astype(np.float64)
