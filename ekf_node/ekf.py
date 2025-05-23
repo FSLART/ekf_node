@@ -16,6 +16,7 @@ class EKF(object):
         # Ensure initial_state is float to avoid dtype issues
         self.state = initial_state.astype(np.float64)  # [x, y, theta]
         self.P = np.zeros((self.n_state+2*self.n_landmarks,self.n_state+2*self.n_landmarks)) # Covariance matrix
+        np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
 
 
