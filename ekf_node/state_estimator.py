@@ -4,15 +4,10 @@ import numpy as np
 import math
 from .ekf import EKF
 from lart_msgs.msg import DynamicsCMD, GNSSINS, Dynamics
-from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped
-from sensor_msgs.msg import Imu, NavSatFix #from the simuator
-from eufs_msgs.msg import WheelSpeedsStamped # from the simulator
 from message_filters import Subscriber, ApproximateTimeSynchronizer
-import time
 
 from geometry_msgs.msg import Vector3Stamped
 import matplotlib.pyplot as plt
-import time
 
 plt.ion()  # Enable interactive mode
 fig, ax = plt.subplots()
@@ -71,15 +66,6 @@ class StateEstimator(Node):
         # Create message_filters subscribers
         self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') # IMU angular velocity
         self.speed_sub = Subscriber(self, Dynamics, '/acu_origin/dynamics') # Motor speed
-
-        # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
-        self.ts = ApproximateTimeSynchronizer(
-            [self.imu_sub, self.speed_sub],
-            queue_size=10,
-            slop=0.5  # seconds of allowed timestamp difference
-        )
-
-        self.ts.registerCallback(self.predict_callback)
 
         # Create publisher
         # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
