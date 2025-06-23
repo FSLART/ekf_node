@@ -46,7 +46,7 @@ class StateEstimator(Node):
 
         ### DECLARING PARAMETERS ###
 
-        self.declare_parameter('dynamics_cmd_topic','/acu_origin/dynamics')
+        self.declare_parameter('dynamics_topic','/acu_origin/dynamics')
         self.declare_parameter('imu_topic','/imu/angular_velocity') # TODO: this is a placeholder, change it to the correct topic
 
         # self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
@@ -55,8 +55,8 @@ class StateEstimator(Node):
         ### SUBSCRIPTIONS ###
 
         # Sub for Motor Speed
-        dynamics_topic = self.get_parameter('dynamics_topic').get_parameter_value().string_value
-        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_topic, self.predict_callback, 10)
+        dynamics_sub = self.get_parameter('dynamics_topic').get_parameter_value().string_value
+        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_sub, self.predict_callback, 10)
 
         # Sub for Imu (angular velocity)
         imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
