@@ -61,7 +61,7 @@ class StateEstimator(Node):
 
         # Sub for Motor Speed
         dynamics_topic = self.get_parameter('dynamics_topic').get_parameter_value().string_value
-        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_topic, self.dynamics_callback, 10)
+        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_topic, self.predict_callback, 10)
 
         # Sub for Imu (angular velocity)
         imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
@@ -90,45 +90,10 @@ class StateEstimator(Node):
 
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
-        self.angular_velocity = imu_msg.angular_velocity.z 
-
-    def get_gnssisns(self, imu_msg, speed_msg):
-        
-        
-        # Convert lat/lon to position in x and y
-        # lat = gps_msg.latitude
-        # lon = gps_msg.longitude
-        # x, y = utm(lon, lat)
-        # self.get_logger().info(f"GPS: {gps_msg.latitude}, {gps_msg.longitude}, LAT: {lat}, LON: {lon}")
-
-        speed = ((speed_msg.speeds.lb_speed + speed_msg.speeds.rb_speed)/2) / 37.8188
-
-        current_yaw = 2 * math.atan2(imu_msg.orientation.z, imu_msg.orientation.w)
-
-        # delta = current_yaw - self.previous_yaw
-        # delta = np.arctan2(np.sin(delta), np.cos(delta))
-
-        current_yaw = (current_yaw + np.pi) % (2 * np.pi) - np.pi
-
-
-        #heading = math.radians(yaw)
-
-        #self.get_logger().info(f"IMU: {yaw}, SPEED: {speed} ")
-
-        # Create a new GNSSINS message
-        gnssins_msg = GNSSINS()
-        gnssins_msg.position.x = 0.0
-        gnssins_msg.position.y = 0.0
-        gnssins_msg.heading = current_yaw
-        gnssins_msg.velocity.x = speed
-        gnssins_msg.velocity.y = 0.0
-        gnssins_msg.velocity.z = 0.0
-
-        # Call the update callback with the new message
-        self.dynamics_update_callback(gnssins_msg)
+        self.angular_velocity = imu_msg.vector.z 
     
 
-    def predict_callback(self, imu_msg, v_msg):
+    def predict_callback(self, v_msg):
         if(self.ekf is None):
             self.intialize_ekf()
         
@@ -136,7 +101,7 @@ class StateEstimator(Node):
         ms_speed = self.tire_perimeter * (v_msg.rpm/self.transmission_ratio/60.0)
 
         # Get current angular velocity from IMU
-        omega_z = imu_msg.angular_velocity.z
+        omega_z = self.angular_velocity 
 
         self.get_logger().info(f"IMU: {omega_z} SPEED: {ms_speed} ")
 
