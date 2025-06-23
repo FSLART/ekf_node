@@ -74,11 +74,12 @@ class StateEstimator(Node):
 
         # dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
         self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
+        
         '''
         # Create message_filters subscribers
-        self.imu_sub = Subscriber(self, Imu, '/imua') #imu
+        self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') #imu
         #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
-        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speedsa')#/ground_truth/wheel_speeds
+        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')#/ground_truth/wheel_speeds
 
         # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
         self.ts = ApproximateTimeSynchronizer(
@@ -89,15 +90,13 @@ class StateEstimator(Node):
 
         self.ts.registerCallback(self.predict_callback)
         '''
-
         # Create publisher
         # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
         # self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
-
-        # Define
+        
+        
         self.ekf = None
 
-    '''
     def get_gnssisns(self, imu_msg, speed_msg):
         
         
@@ -170,7 +169,7 @@ class StateEstimator(Node):
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
 
-        br.set_data(y_cones, x_cones)
+        #br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
         ax.relim()
@@ -182,7 +181,6 @@ class StateEstimator(Node):
         # publish the new state
         self.gns_publish()
         #self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
-    '''
 
     def axanato_callback(self, msg):
         if(self.ekf is None):

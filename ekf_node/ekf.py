@@ -50,25 +50,11 @@ class EKF(object):
 
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
-        
-        '''
-        # Jacobian F
-        F = np.eye(3, dtype=np.float64)
-        F[0, 2] = -vx * np.sin(theta) * dt
-        F[1, 2] = vy * np.cos(theta) * dt
+    def update(self,cones):
+        delta_zs = [np.zeros((2,1)) for lidx in range(self.n_landmarks)] # A list of how far an actual measurement is from the estimate measurement
+        Ks = [np.zeros((self.state.shape[0],2)) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
+        Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
 
-        # Noise Jacobian G
-        G = np.array([
-        [np.cos(theta) * dt, 0], 
-        [np.sin(theta) * dt, 0],
-        [0, dt]
-        ])
-        
-        # Predict covariance
-        self.P = (F @ self.P @ F.T) + (G @ self.noise @ G.T)
-        '''
-    
-        
 
     def update(self, z, R):
         '''z has the same format as the state array (x,y,theta,v)'''
