@@ -37,17 +37,36 @@ class StateEstimator(Node):
     def __init__(self):
         super().__init__('state_estimator')
 
-        # Constants
+        ### COSTANTS ###
+
         lart_pi = 3.14159265358979323846 
         tire_radius = 0.255  
         self.tire_perimeter = 2.0 * lart_pi * tire_radius 
         self.transmission_ratio = 4.0  
         self.previous_yaw = 0.0
 
-        # # Declare parameters
-        # self.declare_parameter('dynamics_cmd_topic','/pc_origin/dynamics')
+        ### MOTOR SPEED VARIABLE ###
+        self.angular_velocity = 0.0  # Initialize motor speed variable
+
+
+        ### DECLARING PARAMETERS ###
+
+        self.declare_parameter('dynamics_cmd_topic','/acu_origin/dynamics')
+        self.declare_parameter('imu_topic','/imu/angular_velocity') # TODO: this is a placeholder, change it to the correct topic
+
         # self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
         #self.declare_parameter('gnssins_topic','/ekf/state') # TODO: this is a placeholder, change it to the correct topic
+
+        ### SUBSCRIPTIONS ###
+
+        # Sub for Motor Speed
+        dynamics_topic = self.get_parameter('dynamics_topic').get_parameter_value().string_value
+        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_topic, self.dynamics_callback, 10)
+
+        # Sub for Imu (angular velocity)
+        imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
+        self.imu_sub = self.create_subscription(Vector3Stamped, imu_topic, self.imu_callback, 10)
+
 
         # Create message_filters subscribers
         self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') # IMU angular velocity
@@ -68,6 +87,10 @@ class StateEstimator(Node):
         
         
         self.ekf = None
+
+    def imu_callback(self, imu_msg):
+        # Save the previous angular velocity
+        self.angular_velocity = imu_msg.angular_velocity.z 
 
     def get_gnssisns(self, imu_msg, speed_msg):
         
