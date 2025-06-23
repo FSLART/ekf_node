@@ -95,7 +95,7 @@ class StateEstimator(Node):
         self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
 
     def dynamics_update_callback(self, msg):
-        if(self.ekf is None):
+        '''if(self.ekf is None):
             self.intialize_ekf()
         # Calculate the speed from the GNSSINS message
         # and update the EKF with the new measurement
@@ -104,7 +104,7 @@ class StateEstimator(Node):
         measurement_noise = np.eye(4) * 0.005
         self.ekf.update(measurement, measurement_noise)
         # publish the new state
-        self.gns_publish()
+        self.gns_publish()'''
 
     def gns_publish(self):
         # Create a new GNSSINS message
