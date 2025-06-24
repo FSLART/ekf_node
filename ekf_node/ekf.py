@@ -180,16 +180,33 @@ class EKF(object):
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
         #Separate old landmarks from new landmarks
-        matched_lists = [matched_blue_cones, matched_yellow_cones, matched_orange_cones, matched_orange_big_cones]
-        all_obs_indeces = [i for lst in matched_lists for i in lst if i != -1]
 
-        # deve ser feito para cada observassao
-        for z in all_obs_indeces:
-            (dist,phi,lidx) = z #remover
+        # matched_lists = [matched_blue_cones, matched_yellow_cones, matched_orange_cones, matched_orange_big_cones]
+        # all_obs_indeces = [i for lst in matched_lists for i in lst if i != -1]
+        
+        #Get all of the cones
+        all_cones = np.vstack([
+            yellow_cones_converted_predicted_pose_keys,
+            blue_cones_converted_predicted_pose_keys,
+            orange_cones_converted_predicted_pose_keys,
+            orange_big_cones_converted_predicted_pose_keys
+        ])
+
+        #Get all of the indeces
+        all_matched_landmarks = np.concatenate([
+            matched_yellow_cones,
+            matched_blue_cones,
+            matched_orange_cones,
+            matched_orange_big_cones
+        ])
+
+        #For each old observation
+        for i,lidx in enumerate(all_matched_landmarks):
+
             state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the estimated position of the landmark
-
             delta  = state_landmark - np.array([[rx],[ry]]) # Helper variable
             q = np.linalg.norm(delta)**2 # Helper variable
+            
 
             dist_est = np.sqrt(q) # Distance between robot estimate and and landmark estimate, i.e., distance estimate
             phi_est = np.arctan2(delta[1,0],delta[0,0])-theta; phi_est = np.arctan2(np.sin(phi_est),np.cos(phi_est)) # Estimated angled between robot heading and landmark
