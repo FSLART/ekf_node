@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.neighbors import KDTree
 import time
 
 class EKF(object):
@@ -9,15 +10,65 @@ class EKF(object):
         self.last_time = time.time()
 
         # auxiliary variables
-        self.n_state = 3 # Can be swithched for a Constant
-        self.n_landmarks = 0
+        self.n_state = 3
         self.Fx = np.eye(3)
+
+        #Landmarks
+        self.b_cones = []
+        self.y_cones = []
+        self.o_cones = []
+        self.bo_cones = []
+        self.b_lidxs = []
+        self.y_lidxs = []
+        self.o_lidxs = []
+        self.bo_lidxs = []
+        n_landmarks = 0
 
         # Ensure initial_state is float to avoid dtype issues
         self.state = initial_state.astype(np.float64)  # [x, y, theta]
-        self.P = np.zeros((self.n_state+2*self.n_landmarks,self.n_state+2*self.n_landmarks)) # Covariance matrix
+        self.P = np.zeros((self.n_state+2*n_landmarks,self.n_state+2*n_landmarks)) # Covariance matrix
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
+
+    def get_cones_from_map(self, state_array, color):
+        '''
+        cones: global position of the cones
+        color: index of the cones of a certain color
+        '''
+        cones = []
+        for i in color:
+            cone = (state_array[self.n_state+2*i,0], state_array[self.n_state+2*i+1,0])
+            cones.append(cone)
+        return cones
+
+    def data_association(cones, observations, threshold=0.8):
+        '''
+        Perform data association between cones and observations.
+        
+        Args:
+            cones (list): List of cone positions (2D coordinates).
+            observations (list): List of observed positions (2D coordinates).
+            threshold (float): Max distance for association.
+        
+        Returns:
+            array: array the same size as observations, for each observation it returns the index of the landmark that is already in the map, -1 if its not there yet
+        '''
+        
+        matched_cones = []
+        tree = KDTree(cones)
+
+        for obs in observations:
+            indices = tree.query_radius([obs], r=threshold)[0]
+            if len(indices) > 0:
+                matched_cones.append(indices[0]) 
+            else:
+                matched_cones.append(-1)
+            
+        return matched_cones
+    
+
+    def data_augmentation(self, new_cones):
+        pass
 
 
     def predict(self, v, w):
@@ -50,20 +101,109 @@ class EKF(object):
 
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
-    def update(self,cones):
-        delta_zs = [np.zeros((2,1)) for lidx in range(self.n_landmarks)] # A list of how far an actual measurement is from the estimate measurement
+    def update(self,z):
+        
+        ### DATA ASSOCIATION ###
+
+        map_blue_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
+        map_yellow_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
+        map_orange_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
+        map_orange_big_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
+
+        #separates the cones in the map by color
+        blue_cones_converted_predicted_pose = {}
+        yellow_cones_converted_predicted_pose = {}
+        orange_cones_converted_predicted_pose = {}
+        orange_big_cones_converted_predicted_pose = {}
+        pose_x, pose_y, pose_theta = self.state[0], self.state[1], self.state[2]
+
+        for obs, i in z:
+            obs_x, obs_y = obs.position.x, obs.position.y
+            color = obs.class_type
+            # Calculate the expected observation
+            expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
+            expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
+            if color == 1:
+                yellow_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
+            elif color == 2:
+                blue_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
+            elif color == 3:
+                orange_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
+            elif color == 4:
+                orange_big_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
+
+        #gets the global position of the cones
+        yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
+        blue_cones_converted_predicted_pose_keys = np.array(list(blue_cones_converted_predicted_pose.keys()))
+        orange_cones_converted_predicted_pose_keys = np.array(list(orange_cones_converted_predicted_pose.keys()))
+        orange_big_cones_converted_predicted_pose_keys = np.array(list(orange_big_cones_converted_predicted_pose.keys()))
+
+        #perform data association
+        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, threshold=0.5)
+        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, threshold=0.5)
+        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, threshold=0.5)
+        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, threshold=0.5)
+        new_yellow_cones = []
+        new_blue_cones = []
+        new_orange_cones = []
+        new_orange_big_cones = []
+
+        for cords, i in range(yellow_cones_converted_predicted_pose_keys):
+            if matched_yellow_cones[i] == -1:
+                new_yellow_cones.append(yellow_cones_converted_predicted_pose[cords])
+    
+        for cords, i in range(blue_cones_converted_predicted_pose_keys):
+            if matched_blue_cones[i] == -1:
+                new_blue_cones.append(blue_cones_converted_predicted_pose[cords])
+
+        for cords, i in range(orange_cones_converted_predicted_pose_keys):
+            if matched_orange_cones[i] == -1:
+                new_orange_cones.append(orange_cones_converted_predicted_pose[cords])
+
+        for cords, i in range(orange_big_cones_converted_predicted_pose_keys):
+            if matched_orange_big_cones[i] == -1:
+                new_orange_big_cones.append(orange_big_cones_converted_predicted_pose[cords])
+
+        ### MEASUREMENT UPDATE ###
+
+        rx,ry,theta = self.state[0,0],self.state[1,0],self.state[2,0] # robot position (x,y) and heading 
+        delta_zs = [np.zeros((2,1)) for lidx in range(self.n_landmarks)]  # Place holder for each cone (landmark)
         Ks = [np.zeros((self.state.shape[0],2)) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
+        
+        for z in zs:
+            (dist,phi,lidx) = z
+            mu_landmark = mu[n_state+lidx*2:n_state+lidx*2+2] # Get the estimated position of the landmark
+            if np.isnan(mu_landmark[0]): # If the landmark hasn't been observed before, then initialize (lx,ly)
+                mu_landmark[0] = rx + dist*np.cos(phi+theta) # lx, x position of landmark
+                mu_landmark[1] = ry+ dist*np.sin(phi+theta) # ly, y position of landmark
+                mu[n_state+lidx*2:n_state+lidx*2+2] = mu_landmark # Save these values to the state estimate mu
+            delta  = mu_landmark - np.array([[rx],[ry]]) # Helper variable
+            q = np.linalg.norm(delta)**2 # Helper variable
 
+            dist_est = np.sqrt(q) # Distance between robot estimate and and landmark estimate, i.e., distance estimate
+            phi_est = np.arctan2(delta[1,0],delta[0,0])-theta; phi_est = np.arctan2(np.sin(phi_est),np.cos(phi_est)) # Estimated angled between robot heading and landmark
+            z_est_arr = np.array([[dist_est],[phi_est]]) # Estimated observation, in numpy array
+            z_act_arr = np.array([[dist],[phi]]) # Actual observation in numpy array
+            delta_zs[lidx] = z_act_arr-z_est_arr # Difference between actual and estimated observation
 
-    def update(self, z, R):
-        '''z has the same format as the state array (x,y,theta,v)'''
-        z_pred = self.state.copy() #state from the prediction step
-        y = z - z_pred #current state - predicted state
-        H = np.eye(3, dtype=np.float64) # identity matrix because the state array is the same as the measurement # USED TO BE 4!
-        S = H @ self.P @ H.T + R # identity * the covariance matrix * the transposed of the identity + the measurement noise
-        K = self.P @ H.T @ np.linalg.inv(S) # covariance * identity transposed * inverse of the previous calculation
-        self.state += K @ y  # add to the state the kalman gain * the difference between the measurement and the predicted state
-        #self.state = self.state.reshape(-1, 1) #not needed, it is already a one column vector
-        I = np.eye(self.P.shape[0], dtype=np.float64)# identity matrix with the same shape as the covariance matrix
-        self.P = (I - K @ H) @ self.P # update the covariance matrix -> (identity - kalman gain * identity) * covariance matrix
+            # Helper matrices in computing the measurement update
+            Fxj = np.block([[Fx],[np.zeros((2,Fx.shape[1]))]])
+            Fxj[n_state:n_state+2,n_state+2*lidx:n_state+2*lidx+2] = np.eye(2)
+            H = np.array([[-delta[0,0]/np.sqrt(q),-delta[1,0]/np.sqrt(q),0,delta[0,0]/np.sqrt(q),delta[1,0]/np.sqrt(q)],\
+                        [delta[1,0]/q,-delta[0,0]/q,-1,-delta[1,0]/q,+delta[0,0]/q]])
+            H = H.dot(Fxj)
+            Hs[lidx] = H # Added to list of matrices
+            Ks[lidx] = sigma.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(sigma).dot(np.transpose(H)) + Q)) # Add to list of matrices
+        
+        
+        # After storing appropriate matrices, perform measurement update of mu and sigma
+        mu_offset = np.zeros(mu.shape) # Offset to be added to state estimate
+        sigma_factor = np.eye(sigma.shape[0]) # Factor to multiply state uncertainty
+        for lidx in range(self.n_landmarks):
+            mu_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
+            sigma_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
+        mu = mu + mu_offset # Update state estimate
+        sigma = sigma_factor.dot(sigma) # Update state uncertainty
+        return mu,sigma
+
