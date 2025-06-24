@@ -18,7 +18,6 @@ plt.ion()  # Enable interactive mode
 fig, ax = plt.subplots()
 sc, = ax.plot([], [], 'bo')  # 'bo' for blue dots
 line, = ax.plot([], [], 'b-')  # line to show trajectory
-br, = ax.plot([], [], 'ro')  # red dots for cones
 ax.set_xlim(-10, 10)  # You can adjust these as needed
 ax.set_ylim(-10, 10)
 ax.set_xlabel("State[1] (y)")
@@ -30,22 +29,6 @@ ax.axis('equal')
 
 x_vals = []
 y_vals = []
-
-
-'''
-# Read the CSV file of the track
-file = open("/home/tomas/ros2_ws/src/eufs_sim/eufs_tracks/csv/small_track.csv", "r") #TODO: change to the correct file
-
-lin = file.readlines()
-
-lin.pop(0)  # Remove the first line
-for l in lin:
-    l = l.split(",")
-    x_cones.append(float(l[1]))
-    y_cones.append(float(l[2]))
-
-file.close()
-'''
 
 class StateEstimator(Node):
 
@@ -59,37 +42,13 @@ class StateEstimator(Node):
         self.transmission_ratio = 4.0  
         self.previous_yaw = 0.0
 
-        # To check the fequency
-        # self.last_time = time.time()
+        ### MOTOR SPEED VARIABLE ###
+        self.angular_velocity = 0.0  # Initialize motor speed variable
 
+        # Create subcriptions
+        self.speed_sub = self.create_subscription(WheelSpeedsStamped, '/ground_truth/wheel_speeds', self.predict_callback, 10)
+        self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
 
-        # # Declare parameters
-        # self.declare_parameter('dynamics_cmd_topic','/pc_origin/dynamics')
-        # self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
-        #self.declare_parameter('gnssins_topic','/ekf/state') # TODO: this is a placeholder, change it to the correct topic
-
-        # # Create subcriptions
-        # dynamics_cmd_topic = self.get_parameter('dynamics_cmd_topic').get_parameter_value().string_value
-        # self.dynamics_sub = self.create_subscription(DynamicsCMD, dynamics_cmd_topic, self.dynamics_callback, 100)
-
-        # dynamics_update_topic = self.get_parameter('dynamics_update_topic').get_parameter_value().string_value
-        self._sub = self.create_subscription(Vector3Stamped, '/imu/angular_velocity', self.axanato_callback, 10)
-        
-        '''
-        # Create message_filters subscribers
-        self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') #imu
-        #self.gps_sub = Subscriber(self, NavSatFix, '/gps')
-        self.speed_sub = Subscriber(self, WheelSpeedsStamped, '/ground_truth/wheel_speeds')#/ground_truth/wheel_speeds
-
-        # ApproximateTimeSynchronizer (you can also use TimeSynchronizer for exact match)
-        self.ts = ApproximateTimeSynchronizer(
-            [self.imu_sub, self.speed_sub],
-            queue_size=10,
-            slop=0.5  # seconds of allowed timestamp difference
-        )
-
-        self.ts.registerCallback(self.predict_callback)
-        '''
         # Create publisher
         # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
         # self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
@@ -97,119 +56,13 @@ class StateEstimator(Node):
         
         self.ekf = None
 
-    def get_gnssisns(self, imu_msg, speed_msg):
-        
-        
-        # Convert lat/lon to position in x and y
-        # lat = gps_msg.latitude
-        # lon = gps_msg.longitude
-        # x, y = utm(lon, lat)
-        # self.get_logger().info(f"GPS: {gps_msg.latitude}, {gps_msg.longitude}, LAT: {lat}, LON: {lon}")
 
-        speed = ((speed_msg.speeds.lb_speed + speed_msg.speeds.rb_speed)/2) / 37.8188
-
-        current_yaw = 2 * math.atan2(imu_msg.orientation.z, imu_msg.orientation.w)
-
-        # delta = current_yaw - self.previous_yaw
-        # delta = np.arctan2(np.sin(delta), np.cos(delta))
-
-        current_yaw = (current_yaw + np.pi) % (2 * np.pi) - np.pi
+    def imu_callback(self, imu_msg):
+        # Save the previous angular velocity
+        self.angular_velocity = imu_msg.angular_velocity.z
 
 
-        #heading = math.radians(yaw)
-
-        #self.get_logger().info(f"IMU: {yaw}, SPEED: {speed} ")
-
-        # Create a new GNSSINS message
-        gnssins_msg = GNSSINS()
-        gnssins_msg.position.x = 0.0
-        gnssins_msg.position.y = 0.0
-        gnssins_msg.heading = current_yaw
-        gnssins_msg.velocity.x = speed
-        gnssins_msg.velocity.y = 0.0
-        gnssins_msg.velocity.z = 0.0
-
-        # Call the update callback with the new message
-        self.dynamics_update_callback(gnssins_msg)
-    
-
-
-    def dynamics_callback(self, msg):
-        if(self.ekf is None):
-            self.intialize_ekf()
-        # Calculate the rpm to m/s
-        ms_speed = msg.rpm
-
-        # #Check the frequency
-        # current_time = time.time()
-        # dt = current_time - self.last_time
-        # self.get_logger().info(f"Frequency: {1/dt} Hz")
-
-        # self.last_time = current_time
-        
-        #print steering angle from the spac
-        # steering_angle_degrees = math.degrees(msg.drive.steering_angle)
-        # steering_angle_degrees = round(steering_angle_degrees, 3)
-        #self.get_logger().info(f"Steering angle in degrees: {steering_angle_degrees}")
-
-        steering_angle = msg.steering_angle
-        # if steering_angle_degrees < 5:
-        #     steering_angle = 0.0
-
-        # Predict the next state
-        #control_input = np.array([ms_speed, msg.steering_angle], dtype=np.float64)
-        control_input = np.array([ms_speed, steering_angle], dtype=np.float64)
-        self.ekf.predict(control_input)
-
-        #write data to a file
-        # file = open("ekf_log.txt", "w")
-        # file.write(f"{self.ekf.state[0]},{self.ekf.state[1]},{self.ekf.state[2]}\n")
-
-        #plot the trajectory
-        x_vals.append(float(self.ekf.state[0]))
-        y_vals.append(float(self.ekf.state[1]))
-
-        #br.set_data(y_cones, x_cones)
-        sc.set_data(y_vals, x_vals)
-        line.set_data(y_vals, x_vals)
-        ax.relim()
-        ax.autoscale_view()
-        
-        plt.draw()
-        plt.pause(0.001)
-
-        # publish the new state
-        self.gns_publish()
-        #self.get_logger().info(f"Predicted state: {self.ekf.state.flatten()}")
-
-    def axanato_callback(self, msg):
-        if(self.ekf is None):
-            self.intialize_ekf()
-        
-        # Get current angular velocity from IMU
-        omega_z = msg.vector.z
-
-        self.get_logger().info(f"IMU: {omega_z} ")
-        self.get_logger().info(f"heading: {self.ekf.state[2]} ")
-
-        # Call the predict method of the EKF
-        self.ekf.predict(0.5, omega_z)
-
-        #plot the trajectory
-        x_vals.append(float(self.ekf.state[0]))
-        y_vals.append(float(self.ekf.state[1]))
-
-        #br.set_data(y_cones, x_cones)
-        sc.set_data(y_vals, x_vals)
-        line.set_data(y_vals, x_vals)
-        ax.relim()
-        ax.autoscale_view()
-        
-        plt.draw()
-        plt.pause(0.001)
-
-
-    def predict_callback(self, imu_msg, v_msg):
+    def predict_callback(self, v_msg):
         if(self.ekf is None):
             self.intialize_ekf()
         
@@ -217,7 +70,7 @@ class StateEstimator(Node):
         v = ((v_msg.speeds.lb_speed + v_msg.speeds.rb_speed)/2) / 37.8188
 
         # Get current angular velocity from IMU
-        omega_z = imu_msg.angular_velocity.z
+        omega_z = self.angular_velocity
 
         self.get_logger().info(f"IMU: {omega_z} SPEED: {v} ")
 
@@ -228,7 +81,6 @@ class StateEstimator(Node):
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
 
-        br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
         ax.relim()
