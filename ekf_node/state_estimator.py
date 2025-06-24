@@ -51,8 +51,7 @@ class StateEstimator(Node):
 
         
         # Create publisher
-        position_topic = self.get_parameter('position_topic').get_parameter_value().string_value
-        self.pos_pub = self.create_publisher(PoseStamped, position_topic, 10)
+        self.pos_pub = self.create_publisher(PoseStamped, "/ekf/state", 10)
         
         
         self.ekf = None
