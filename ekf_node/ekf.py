@@ -14,6 +14,12 @@ class EKF(object):
         self.Fx = np.eye(3)
 
         #Landmarks
+
+        self.blue_cones_indeces
+        self.yellow_cones_indeces
+        self.orange_cones_indeces
+        self.orange_big_cones_indeces
+
         self.b_cones = []
         self.y_cones = []
         self.o_cones = []
@@ -29,6 +35,7 @@ class EKF(object):
         self.P = np.zeros((self.n_state+2*n_landmarks,self.n_state+2*n_landmarks)) # Covariance matrix
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
+        self.Q = np.diag([0.003,0.005]) # sigma_r, sigma_phi
 
     def get_cones_from_map(self, state_array, color):
         '''
@@ -81,7 +88,7 @@ class EKF(object):
         # Getting the state
         theta = self.state[2, 0]  # Robot heading
         
-        # Update state estimate mu with model
+        # Update state estimate with model
         state_model_mat = np.zeros((3,1)) # Initialize state update matrix from model
 
         state_model_mat[0] = -(v/w)*np.sin(theta)+(v/w)*np.sin(theta+w*dt) if np.abs(w)>0.01 else v*np.cos(theta)*dt # Update in the robot x position
@@ -106,9 +113,9 @@ class EKF(object):
         ### DATA ASSOCIATION ###
 
         map_blue_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
-        map_yellow_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
-        map_orange_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
-        map_orange_big_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
+        map_yellow_cones = self.get_cones_from_map(self, self.state, self.yellow_cones_indeces)
+        map_orange_cones = self.get_cones_from_map(self, self.state, self.orange_cones_indeces)
+        map_orange_big_cones = self.get_cones_from_map(self, self.state, self.orange_big_cones_indeces)
 
         #separates the cones in the map by color
         blue_cones_converted_predicted_pose = {}
@@ -117,10 +124,10 @@ class EKF(object):
         orange_big_cones_converted_predicted_pose = {}
         pose_x, pose_y, pose_theta = self.state[0], self.state[1], self.state[2]
 
-        for obs, i in z:
+        for i,obs in enumerate(z):
             obs_x, obs_y = obs.position.x, obs.position.y
             color = obs.class_type
-            # Calculate the expected observation
+            # Calculate the expected observation #TODO:review
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
             if color == 1:
@@ -147,7 +154,7 @@ class EKF(object):
         new_blue_cones = []
         new_orange_cones = []
         new_orange_big_cones = []
-
+        
         for cords, i in range(yellow_cones_converted_predicted_pose_keys):
             if matched_yellow_cones[i] == -1:
                 new_yellow_cones.append(yellow_cones_converted_predicted_pose[cords])
@@ -171,14 +178,15 @@ class EKF(object):
         Ks = [np.zeros((self.state.shape[0],2)) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
+        #Separate old landmarks from new landmarks
+
+
+        # deve ser feito para cada observassao
         for z in zs:
-            (dist,phi,lidx) = z
-            mu_landmark = mu[n_state+lidx*2:n_state+lidx*2+2] # Get the estimated position of the landmark
-            if np.isnan(mu_landmark[0]): # If the landmark hasn't been observed before, then initialize (lx,ly)
-                mu_landmark[0] = rx + dist*np.cos(phi+theta) # lx, x position of landmark
-                mu_landmark[1] = ry+ dist*np.sin(phi+theta) # ly, y position of landmark
-                mu[n_state+lidx*2:n_state+lidx*2+2] = mu_landmark # Save these values to the state estimate mu
-            delta  = mu_landmark - np.array([[rx],[ry]]) # Helper variable
+            (dist,phi,lidx) = z #remover
+            state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the estimated position of the landmark
+
+            delta  = state_landmark - np.array([[rx],[ry]]) # Helper variable
             q = np.linalg.norm(delta)**2 # Helper variable
 
             dist_est = np.sqrt(q) # Distance between robot estimate and and landmark estimate, i.e., distance estimate
@@ -188,13 +196,13 @@ class EKF(object):
             delta_zs[lidx] = z_act_arr-z_est_arr # Difference between actual and estimated observation
 
             # Helper matrices in computing the measurement update
-            Fxj = np.block([[Fx],[np.zeros((2,Fx.shape[1]))]])
-            Fxj[n_state:n_state+2,n_state+2*lidx:n_state+2*lidx+2] = np.eye(2)
+            Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
+            Fxj[self.n_state:self.n_state+2,self.n_state+2*lidx:self.n_state+2*lidx+2] = np.eye(2)
             H = np.array([[-delta[0,0]/np.sqrt(q),-delta[1,0]/np.sqrt(q),0,delta[0,0]/np.sqrt(q),delta[1,0]/np.sqrt(q)],\
                         [delta[1,0]/q,-delta[0,0]/q,-1,-delta[1,0]/q,+delta[0,0]/q]])
             H = H.dot(Fxj)
             Hs[lidx] = H # Added to list of matrices
-            Ks[lidx] = sigma.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(sigma).dot(np.transpose(H)) + Q)) # Add to list of matrices
+            Ks[lidx] = sigma.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(sigma).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
         
         
         # After storing appropriate matrices, perform measurement update of mu and sigma
