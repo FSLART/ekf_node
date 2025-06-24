@@ -6,7 +6,7 @@ from .ekf import EKF
 from lart_msgs.msg import DynamicsCMD, GNSSINS, Dynamics
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import Vector3Stamped, PoseStamped
 import matplotlib.pyplot as plt
 
 plt.ion()  # Enable interactive mode
@@ -47,10 +47,8 @@ class StateEstimator(Node):
         ### DECLARING PARAMETERS ###
 
         self.declare_parameter('dynamics_topic','/acu_origin/dynamics')
-        self.declare_parameter('imu_topic','/imu/angular_velocity') # TODO: this is a placeholder, change it to the correct topic
-
-        # self.declare_parameter('dynamics_update_topic','/only/god/knows') # TODO: this is a placeholder, change it to the correct topic
-        #self.declare_parameter('gnssins_topic','/ekf/state') # TODO: this is a placeholder, change it to the correct topic
+        self.declare_parameter('imu_topic','/imu/angular_velocity')
+        self.declare_parameter('position_topic','/ekf/state')
 
         ### SUBSCRIPTIONS ###
 
@@ -67,9 +65,12 @@ class StateEstimator(Node):
         self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') # IMU angular velocity
         self.speed_sub = Subscriber(self, Dynamics, '/acu_origin/dynamics') # Motor speed
 
+
+        ### PUBLISHER ###
+
         # Create publisher
-        # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
-        # self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
+        position_topic = self.get_parameter('position_topic').get_parameter_value().string_value
+        self.pos_pub = self.create_publisher(PoseStamped, position_topic, 10)
         
         
         self.ekf = None
@@ -133,17 +134,13 @@ class StateEstimator(Node):
         # publish the new state
         self.gns_publish()
 
-    def gns_publish(self):
-        # Create a new GNSSINS message
-        gnssins_msg = GNSSINS()
-        gnssins_msg.position.x = self.ekf.state[0, 0]
-        gnssins_msg.position.y = self.ekf.state[1, 0]
-        gnssins_msg.heading = self.ekf.state[2, 0]
-        # gnssins_msg.velocity.x = self.ekf.state[3, 0] * math.cos(self.ekf.state[2, 0])
-        # gnssins_msg.velocity.y = self.ekf.state[3, 0] * math.sin(self.ekf.state[2, 0])
-        # gnssins_msg.velocity.z = 0.0
-        # Publish the GNSSINS message
-        self.publisher_.publish(gnssins_msg)
+    def position_publish(self):
+        # Create a new PoseStamped mission
+        msg = new PoseStamped()
+        msg.pose.position.x = self.ekf.state[0,0]
+        msg.pose.position.y = self.ekf.state[1,0]
+        msg.pose.orientation.w = self.ekf.state[2,0]
+        self.pos_pub.publish(msg)
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
