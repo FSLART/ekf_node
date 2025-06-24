@@ -154,22 +154,23 @@ class EKF(object):
         new_blue_cones = []
         new_orange_cones = []
         new_orange_big_cones = []
-        
-        for cords, i in range(yellow_cones_converted_predicted_pose_keys):
+
+        for i, cords in enumerate(yellow_cones_converted_predicted_pose_keys):
             if matched_yellow_cones[i] == -1:
-                new_yellow_cones.append(yellow_cones_converted_predicted_pose[cords])
-    
-        for cords, i in range(blue_cones_converted_predicted_pose_keys):
+                new_yellow_cones.append(yellow_cones_converted_predicted_pose[tuple(cords)])
+
+        for i, cords in enumerate(blue_cones_converted_predicted_pose_keys):
             if matched_blue_cones[i] == -1:
-                new_blue_cones.append(blue_cones_converted_predicted_pose[cords])
+                new_blue_cones.append(blue_cones_converted_predicted_pose[tuple(cords)])
 
-        for cords, i in range(orange_cones_converted_predicted_pose_keys):
+        for i, cords in enumerate(orange_cones_converted_predicted_pose_keys):
             if matched_orange_cones[i] == -1:
-                new_orange_cones.append(orange_cones_converted_predicted_pose[cords])
+                new_orange_cones.append(orange_cones_converted_predicted_pose[tuple(cords)])
 
-        for cords, i in range(orange_big_cones_converted_predicted_pose_keys):
+        for i, cords in enumerate(orange_big_cones_converted_predicted_pose_keys):
             if matched_orange_big_cones[i] == -1:
-                new_orange_big_cones.append(orange_big_cones_converted_predicted_pose[cords])
+                new_orange_big_cones.append(orange_big_cones_converted_predicted_pose[tuple(cords)])
+
 
         ### MEASUREMENT UPDATE ###
 
@@ -179,10 +180,11 @@ class EKF(object):
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
         #Separate old landmarks from new landmarks
-
+        matched_lists = [matched_blue_cones, matched_yellow_cones, matched_orange_cones, matched_orange_big_cones]
+        all_obs_indeces = [i for lst in matched_lists for i in lst if i != -1]
 
         # deve ser feito para cada observassao
-        for z in zs:
+        for z in all_obs_indeces:
             (dist,phi,lidx) = z #remover
             state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the estimated position of the landmark
 
