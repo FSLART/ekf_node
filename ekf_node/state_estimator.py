@@ -10,7 +10,7 @@ from eufs_msgs.msg import WheelSpeedsStamped # from the simulator
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 import time
 
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import Vector3Stamped, PoseStamped
 import matplotlib.pyplot as plt
 import time
 
@@ -49,9 +49,10 @@ class StateEstimator(Node):
         self.speed_sub = self.create_subscription(WheelSpeedsStamped, '/ground_truth/wheel_speeds', self.predict_callback, 10)
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
 
+        
         # Create publisher
-        # gnssins_topic = self.get_parameter('gnssins_topic').get_parameter_value().string_value
-        # self.publisher_ = self.create_publisher(GNSSINS, gnssins_topic, 10)
+        position_topic = self.get_parameter('position_topic').get_parameter_value().string_value
+        self.pos_pub = self.create_publisher(PoseStamped, position_topic, 10)
         
         
         self.ekf = None
@@ -115,17 +116,13 @@ class StateEstimator(Node):
         # publish the new state
         self.gns_publish()
 
-    def gns_publish(self):
-        # Create a new GNSSINS message
-        gnssins_msg = GNSSINS()
-        gnssins_msg.position.x = self.ekf.state[0, 0]
-        gnssins_msg.position.y = self.ekf.state[1, 0]
-        gnssins_msg.heading = self.ekf.state[2, 0]
-        # gnssins_msg.velocity.x = self.ekf.state[3, 0] * math.cos(self.ekf.state[2, 0])
-        # gnssins_msg.velocity.y = self.ekf.state[3, 0] * math.sin(self.ekf.state[2, 0])
-        # gnssins_msg.velocity.z = 0.0
-        # Publish the GNSSINS message
-        self.publisher_.publish(gnssins_msg)
+    def position_publish(self):
+        # Create a new PoseStamped mission
+        msg = PoseStamped()
+        msg.pose.position.x = self.ekf.state[0,0]
+        msg.pose.position.y = self.ekf.state[1,0]
+        msg.pose.orientation.w = self.ekf.state[2,0]
+        self.pos_pub.publish(msg)
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
