@@ -136,7 +136,7 @@ class StateEstimator(Node):
 
     def position_publish(self):
         # Create a new PoseStamped mission
-        msg = new PoseStamped()
+        msg = PoseStamped()
         msg.pose.position.x = self.ekf.state[0,0]
         msg.pose.position.y = self.ekf.state[1,0]
         msg.pose.orientation.w = self.ekf.state[2,0]
