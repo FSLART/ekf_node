@@ -14,20 +14,10 @@ class EKF(object):
         self.Fx = np.eye(3)
 
         #Landmarks
-
-        self.blue_cones_indeces
-        self.yellow_cones_indeces
-        self.orange_cones_indeces
-        self.orange_big_cones_indeces
-
-        self.b_cones = []
-        self.y_cones = []
-        self.o_cones = []
-        self.bo_cones = []
-        self.b_lidxs = []
-        self.y_lidxs = []
-        self.o_lidxs = []
-        self.bo_lidxs = []
+        self.blue_cones_indeces = {}
+        self.yellow_cones_indeces = {}
+        self.orange_cones_indeces = {}
+        self.orange_big_cones_indeces = {}
         n_landmarks = 0
 
         # Ensure initial_state is float to avoid dtype issues
@@ -74,8 +64,36 @@ class EKF(object):
         return matched_cones
     
 
-    def data_augmentation(self, new_cones):
-        pass
+    def data_augmentation(self, new_blue_cones, new_yellow_cones, new_orange_cones, new_orange_big_cones):
+
+        # Define mapping of cones to color label and tracking list
+        cone_sets = [
+            (new_blue_cones, self.blue_cones_indices),
+            (new_yellow_cones, self.yellow_cones_indices),
+            (new_orange_cones, self.orange_cones_indices),
+            (new_orange_big_cones, self.orange_big_cones_indices)
+        ]
+
+        for new_cone_list, cone_index_list in cone_sets:
+            for cone_coords in new_cone_list:
+                landmark_x, landmark_y = cone_coords  # Already in global frame
+
+                # Add landmark to state
+                new_landmark = np.array([[landmark_x], [landmark_y]])
+                self.state = np.vstack((self.state, new_landmark))
+
+                # Expand covariance matrix with high initial uncertainty
+                landmark_cov = np.eye(2) * 1e3
+                top_right = np.zeros((self.P.shape[0], 2))
+                bottom_left = np.zeros((2, self.P.shape[1]))
+                self.P = np.block([
+                    [self.P,        top_right],
+                    [bottom_left,   landmark_cov]
+                ])
+
+                # Save this landmark's index
+                cone_index_list.append(self.n_landmarks)
+                self.n_landmarks += 1
 
 
     def predict(self, v, w):
@@ -179,11 +197,6 @@ class EKF(object):
         Ks = [np.zeros((self.state.shape[0],2)) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
-        #Separate old landmarks from new landmarks
-
-        # matched_lists = [matched_blue_cones, matched_yellow_cones, matched_orange_cones, matched_orange_big_cones]
-        # all_obs_indeces = [i for lst in matched_lists for i in lst if i != -1]
-        
         #Get all of the cones
         all_cones = np.vstack([
             yellow_cones_converted_predicted_pose_keys,
@@ -227,4 +240,7 @@ class EKF(object):
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
+        
+        ### ADD NEW CONES ###
+        self.data_augmentation(self,new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
 

@@ -3,7 +3,7 @@ from rclpy.node import Node
 import numpy as np
 import math
 from .ekf import EKF
-from lart_msgs.msg import DynamicsCMD, GNSSINS, Dynamics
+from lart_msgs.msg import GNSSINS, Dynamics, ConeArray
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 from geometry_msgs.msg import Vector3Stamped, PoseStamped
@@ -48,6 +48,7 @@ class StateEstimator(Node):
 
         self.declare_parameter('dynamics_topic','/acu_origin/dynamics')
         self.declare_parameter('imu_topic','/imu/angular_velocity')
+        self.declare_parameter('cones_topic','/mapping/cones')
         self.declare_parameter('position_topic','/ekf/state')
 
         ### SUBSCRIPTIONS ###
@@ -60,6 +61,9 @@ class StateEstimator(Node):
         imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
         self.imu_sub = self.create_subscription(Vector3Stamped, imu_topic, self.imu_callback, 10)
 
+        # Sub for Observations
+        cones_topic = self.get_parameter('cones_topic').get_parameter_value().string_value
+        self.cones_sub = self.create_subscription(ConeArray, cones_topic, self.update_callback, 10)
 
         # Create message_filters subscribers
         self.imu_sub = Subscriber(self, Vector3Stamped, '/imu/angular_velocity') # IMU angular velocity
@@ -99,6 +103,34 @@ class StateEstimator(Node):
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
 
+
+        # Extract landmark coordinates from EKF state
+        landmarks = self.ekf.state[3:].reshape(-1, 2)  # skip x, y, theta, then reshape
+
+        # Separate landmarks by color using index lists
+        blue_cones = [landmarks[i] for i in self.ekf.blue_cones_indices]
+        yellow_cones = [landmarks[i] for i in self.ekf.yellow_cones_indices]
+        orange_cones = [landmarks[i] for i in self.ekf.orange_cones_indices]
+        orange_big_cones = [landmarks[i] for i in self.ekf.orange_big_cones_indices]
+
+        # Plot landmarks by color
+        if blue_cones:
+            blue_cones = np.array(blue_cones)
+            ax.scatter(blue_cones[:, 0], blue_cones[:, 1], c='blue', marker='o', label='Blue Cones')
+        if yellow_cones:
+            yellow_cones = np.array(yellow_cones)
+            ax.scatter(yellow_cones[:, 0], yellow_cones[:, 1], c='yellow', marker='o', label='Yellow Cones')
+        if orange_cones:
+            orange_cones = np.array(orange_cones)
+            ax.scatter(orange_cones[:, 0], orange_cones[:, 1], c='orange', marker='x', label='Orange Cones')
+        if orange_big_cones:
+            orange_big_cones = np.array(orange_big_cones)
+            ax.scatter(orange_big_cones[:, 0], orange_big_cones[:, 1], c='red', marker='^', label='Big Orange Cones')
+
+        # Avoid duplicate legend items
+        ax.legend(loc='upper right')
+
+
         #br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
@@ -109,30 +141,13 @@ class StateEstimator(Node):
         plt.pause(0.001)
 
 
-    def dynamics_update_callback(self, msg):
+    def update_callback(self, obs_msg):
         if(self.ekf is None):
             self.intialize_ekf()
-        # Calculate the speed from the GNSSINS message
-        # and update the EKF with the new measurement
-        # speed = math.sqrt(msg.velocity.x**2 + msg.velocity.y**2)
+        self.ekf.update(obs_msg)
 
-        #Check the frequency
-        # current_time = time.time()
-        # dt = current_time - self.last_time
-        # self.get_logger().info(f"Frequency: {1/dt} Hz")
-
-        # self.last_time = current_time
-        
-        speed = msg.velocity.x # AXANATO
-
-        self.get_logger().info(f"Predicted state: {self.ekf.state[2,0]}")
-        self.get_logger().info(f"SIMULADOR: {msg.heading}")
-
-        measurement = np.array([[self.ekf.state[0,0]], [self.ekf.state[1,0]], [msg.heading]], dtype=np.float64) #REMOVIDA A SPEED
-        measurement_noise = np.eye(3) * 0.005 # 4
-        self.ekf.update(measurement, measurement_noise)
         # publish the new state
-        self.gns_publish()
+        self.position_publish()
 
     def position_publish(self):
         # Create a new PoseStamped mission
