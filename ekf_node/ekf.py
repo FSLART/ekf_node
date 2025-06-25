@@ -156,7 +156,6 @@ class EKF(object):
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
             if color.data == 1:
-                self.logger.info(f"yellow cones recebidos - Cone {i} at ({expected_obs_x}, {expected_obs_y}) with color {color}")
                 yellow_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
             elif color.data == 2:
                 blue_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
