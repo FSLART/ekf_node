@@ -35,7 +35,7 @@ class EKF(object):
         self.P = np.zeros((self.n_state+2*n_landmarks,self.n_state+2*n_landmarks)) # Covariance matrix
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
-        self.Q = np.diag([0.003,0.005]) # sigma_r, sigma_phi
+        self.Q = np.diag([0.003,0.003]) # sigma_r, sigma_phi
 
     def get_cones_from_map(self, state_array, color):
         '''
@@ -208,26 +208,23 @@ class EKF(object):
                 continue
             
             state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the current estimated position of the landmark
-            measured_landmark = measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
+            measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
             delta_zs[lidx] = measured_landmark - state_landmark # Difference between actual and estimated observation
 
             # Helper matrices in computing the measurement update
             Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
             Fxj[self.n_state:self.n_state+2,self.n_state+2*lidx:self.n_state+2*lidx+2] = np.eye(2)
-            H = np.array([[-delta[0,0]/np.sqrt(q),-delta[1,0]/np.sqrt(q),0,delta[0,0]/np.sqrt(q),delta[1,0]/np.sqrt(q)],\
-                        [delta[1,0]/q,-delta[0,0]/q,-1,-delta[1,0]/q,+delta[0,0]/q]])
-            H = H.dot(Fxj)
+            H = Fxj  # Directly map the observed landmark components in global frame
             Hs[lidx] = H # Added to list of matrices
-            Ks[lidx] = sigma.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(sigma).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
+            Ks[lidx] = self.P.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(self.P).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
         
         
         # After storing appropriate matrices, perform measurement update of mu and sigma
-        mu_offset = np.zeros(mu.shape) # Offset to be added to state estimate
-        sigma_factor = np.eye(sigma.shape[0]) # Factor to multiply state uncertainty
+        state_offset = np.zeros(self.state.shape) # Offset to be added to state estimate
+        covariance_factor = np.eye(self.P.shape[0]) # Factor to multiply state uncertainty
         for lidx in range(self.n_landmarks):
-            mu_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
-            sigma_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
-        mu = mu + mu_offset # Update state estimate
-        sigma = sigma_factor.dot(sigma) # Update state uncertainty
-        return mu,sigma
+            state_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
+            covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
+        self.state = self.state + state_offset # Update state estimate
+        self.P = covariance_factor.dot(self.P) # Update state uncertainty
 
