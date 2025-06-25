@@ -113,24 +113,6 @@ class StateEstimator(Node):
         orange_cones = [landmarks[i] for i in self.ekf.orange_cones_indices]
         orange_big_cones = [landmarks[i] for i in self.ekf.orange_big_cones_indices]
 
-        # Plot landmarks by color
-        if blue_cones:
-            blue_cones = np.array(blue_cones)
-            ax.scatter(blue_cones[:, 0], blue_cones[:, 1], c='blue', marker='o', label='Blue Cones')
-        if yellow_cones:
-            yellow_cones = np.array(yellow_cones)
-            ax.scatter(yellow_cones[:, 0], yellow_cones[:, 1], c='yellow', marker='o', label='Yellow Cones')
-        if orange_cones:
-            orange_cones = np.array(orange_cones)
-            ax.scatter(orange_cones[:, 0], orange_cones[:, 1], c='orange', marker='x', label='Orange Cones')
-        if orange_big_cones:
-            orange_big_cones = np.array(orange_big_cones)
-            ax.scatter(orange_big_cones[:, 0], orange_big_cones[:, 1], c='red', marker='^', label='Big Orange Cones')
-
-        # Avoid duplicate legend items
-        ax.legend(loc='upper right')
-
-
         #br.set_data(y_cones, x_cones)
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)

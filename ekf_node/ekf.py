@@ -1,10 +1,13 @@
 import numpy as np
 from sklearn.neighbors import KDTree
 import time
+import rclpy.logging
 
 class EKF(object):
     def __init__(self, initial_state, noise):
         #self.wheelbase = wheelbase
+
+        self.logger = rclpy.logging.get_logger('ekf_logger')  # Create a logger instance
         
         #Time initialization
         self.last_time = time.time()
@@ -133,10 +136,11 @@ class EKF(object):
         
         ### DATA ASSOCIATION ###
 
-        map_blue_cones = self.get_cones_from_map( self.state, self.blue_cones_indices)
+        map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
         map_yellow_cones = self.get_cones_from_map(self.state, self.yellow_cones_indices)
         map_orange_cones = self.get_cones_from_map(self.state, self.orange_cones_indices)
         map_orange_big_cones = self.get_cones_from_map(self.state, self.orange_big_cones_indices)
+        #self.logger.info(f"Step 1 - Map Cones: Blue: {len(map_blue_cones)}, Yellow: {len(map_yellow_cones)}, Orange: {len(map_orange_cones)}, Orange Big: {len(map_orange_big_cones)}")
 
         #separates the cones in the map by color
         blue_cones_converted_predicted_pose = {}
@@ -151,20 +155,28 @@ class EKF(object):
             # Calculate the expected observation #TODO:review
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
-            if color == 1:
-                yellow_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
-            elif color == 2:
-                blue_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
-            elif color == 3:
-                orange_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
-            elif color == 4:
-                orange_big_cones_converted_predicted_pose[(expected_obs_x, expected_obs_y)] = i
+            if color.data == 1:
+                self.logger.info(f"yellow cones recebidos - Cone {i} at ({expected_obs_x}, {expected_obs_y}) with color {color}")
+                yellow_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            elif color.data == 2:
+                blue_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            elif color.data == 3:
+                orange_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            elif color.data == 4:
+                orange_big_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            #self.logger.info(f"Classica cones recebidos - Cone {i} at ({expected_obs_x}, {expected_obs_y}) with color {color}")
+        
+        self.logger.info(f"Yellow Cones Converted Predicted Pose Size: {len(yellow_cones_converted_predicted_pose)}")
+        for key, value in yellow_cones_converted_predicted_pose.items():
+            self.logger.info(f"Yellow Cone: Position={key}, Index={value}")
 
         #gets the global position of the cones
         yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
         blue_cones_converted_predicted_pose_keys = np.array(list(blue_cones_converted_predicted_pose.keys()))
         orange_cones_converted_predicted_pose_keys = np.array(list(orange_cones_converted_predicted_pose.keys()))
         orange_big_cones_converted_predicted_pose_keys = np.array(list(orange_big_cones_converted_predicted_pose.keys()))
+        
+        #self.logger.info(f"Converted Predicted Pose Keys: Yellow: {len(yellow_cones_converted_predicted_pose_keys)}, Blue: {len(blue_cones_converted_predicted_pose_keys)}, Orange: {len(orange_cones_converted_predicted_pose_keys)}, Orange Big: {len(orange_big_cones_converted_predicted_pose_keys)}")
 
         #perform data association
         matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 0.5)
@@ -218,7 +230,7 @@ class EKF(object):
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
-
+            self.logger.info(f"Updating with landmark {i} at index {lidx} with coordinates {all_cones[i]}")
             #Skip new cones
             if lidx == -1:
                 continue
