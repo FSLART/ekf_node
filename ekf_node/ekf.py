@@ -14,15 +14,15 @@ class EKF(object):
         self.Fx = np.eye(3)
 
         #Landmarks
-        self.blue_cones_indeces = {}
-        self.yellow_cones_indeces = {}
-        self.orange_cones_indeces = {}
-        self.orange_big_cones_indeces = {}
-        n_landmarks = 0
+        self.blue_cones_indices = {}
+        self.yellow_cones_indices = {}
+        self.orange_cones_indices = {}
+        self.orange_big_cones_indices = {}
+        self.n_landmarks = 0
 
         # Ensure initial_state is float to avoid dtype issues
         self.state = initial_state.astype(np.float64)  # [x, y, theta]
-        self.P = np.zeros((self.n_state+2*n_landmarks,self.n_state+2*n_landmarks)) # Covariance matrix
+        self.P = np.zeros((self.n_state+2*self.n_landmarks,self.n_state+2*self.n_landmarks)) # Covariance matrix
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
         self.Q = np.diag([0.003,0.003]) # sigma_r, sigma_phi
@@ -38,7 +38,7 @@ class EKF(object):
             cones.append(cone)
         return cones
 
-    def data_association(cones, observations, threshold=0.8):
+    def data_association(self, cones, observations, threshold):
         '''
         Perform data association between cones and observations.
         
@@ -50,6 +50,9 @@ class EKF(object):
         Returns:
             array: array the same size as observations, for each observation it returns the index of the landmark that is already in the map, -1 if its not there yet
         '''
+
+        if len(cones) == 0:
+            return [-1] * len(observations)
         
         matched_cones = []
         tree = KDTree(cones)
@@ -130,10 +133,10 @@ class EKF(object):
         
         ### DATA ASSOCIATION ###
 
-        map_blue_cones = self.get_cones_from_map(self, self.state, self.blue_cones_indeces)
-        map_yellow_cones = self.get_cones_from_map(self, self.state, self.yellow_cones_indeces)
-        map_orange_cones = self.get_cones_from_map(self, self.state, self.orange_cones_indeces)
-        map_orange_big_cones = self.get_cones_from_map(self, self.state, self.orange_big_cones_indeces)
+        map_blue_cones = self.get_cones_from_map( self.state, self.blue_cones_indices)
+        map_yellow_cones = self.get_cones_from_map(self.state, self.yellow_cones_indices)
+        map_orange_cones = self.get_cones_from_map(self.state, self.orange_cones_indices)
+        map_orange_big_cones = self.get_cones_from_map(self.state, self.orange_big_cones_indices)
 
         #separates the cones in the map by color
         blue_cones_converted_predicted_pose = {}
@@ -142,7 +145,7 @@ class EKF(object):
         orange_big_cones_converted_predicted_pose = {}
         pose_x, pose_y, pose_theta = self.state[0], self.state[1], self.state[2]
 
-        for i,obs in enumerate(z):
+        for i,obs in enumerate(z.cones):
             obs_x, obs_y = obs.position.x, obs.position.y
             color = obs.class_type
             # Calculate the expected observation #TODO:review
@@ -164,10 +167,10 @@ class EKF(object):
         orange_big_cones_converted_predicted_pose_keys = np.array(list(orange_big_cones_converted_predicted_pose.keys()))
 
         #perform data association
-        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, threshold=0.5)
-        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, threshold=0.5)
-        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, threshold=0.5)
-        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, threshold=0.5)
+        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 0.5)
+        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 0.5)
+        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 0.5)
+        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 0.5)
         new_yellow_cones = []
         new_blue_cones = []
         new_orange_cones = []
@@ -242,5 +245,5 @@ class EKF(object):
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
         
         ### ADD NEW CONES ###
-        self.data_augmentation(self,new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
+        self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
 
