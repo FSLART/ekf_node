@@ -203,16 +203,13 @@ class EKF(object):
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
 
-            state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the estimated position of the landmark
-            delta  = state_landmark - np.array([[rx],[ry]]) # Helper variable
-            q = np.linalg.norm(delta)**2 # Helper variable
+            #Skip new cones
+            if lidx == -1:
+                continue
             
-
-            dist_est = np.sqrt(q) # Distance between robot estimate and and landmark estimate, i.e., distance estimate
-            phi_est = np.arctan2(delta[1,0],delta[0,0])-theta; phi_est = np.arctan2(np.sin(phi_est),np.cos(phi_est)) # Estimated angled between robot heading and landmark
-            z_est_arr = np.array([[dist_est],[phi_est]]) # Estimated observation, in numpy array
-            z_act_arr = np.array([[dist],[phi]]) # Actual observation in numpy array
-            delta_zs[lidx] = z_act_arr-z_est_arr # Difference between actual and estimated observation
+            state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the current estimated position of the landmark
+            measured_landmark = measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
+            delta_zs[lidx] = measured_landmark - state_landmark # Difference between actual and estimated observation
 
             # Helper matrices in computing the measurement update
             Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
