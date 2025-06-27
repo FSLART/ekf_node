@@ -212,7 +212,7 @@ class EKF(object):
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
         #Get all of the cones
-        all_cones = np.vstack([
+        all_cones = np.concatenate([
             yellow_cones_converted_predicted_pose_keys,
             blue_cones_converted_predicted_pose_keys,
             orange_cones_converted_predicted_pose_keys,
