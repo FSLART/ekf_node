@@ -212,16 +212,29 @@ class EKF(object):
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
         #Only chose non empty cone arrays
-        arrays_to_concat = [arr for arr in [yellow_cones_converted_predicted_pose_keys, blue_cones_converted_predicted_pose_keys, orange_cones_converted_predicted_pose_keys, orange_big_cones_converted_predicted_pose_keys] if arr.size > 0]
-
+        arrays_to_concat = [
+            np.array(arr) for arr in [
+                yellow_cones_converted_predicted_pose_keys,
+                blue_cones_converted_predicted_pose_keys,
+                orange_cones_converted_predicted_pose_keys,
+                orange_big_cones_converted_predicted_pose_keys
+            ] if len(arr) > 0
+]
         #Get all of the cones
-        all_cones = np.concatenate([arrays_to_concat])
+        all_cones = np.concatenate(arrays_to_concat)
 
         #Only Get non empty match arrays
-        matchs_to_contat = [arr for arr in [matched_yellow_cones, matched_blue_cones, matched_orange_cones, matched_orange_big_cones]if arr.size > 0]
-
+        matchs_to_contat = [
+            np.array(arr) for arr in [
+                matched_yellow_cones,
+                matched_blue_cones,
+                matched_orange_cones,
+                matched_orange_big_cones
+            ] if len(arr) > 0
+]
         #Get all of the indeces
-        all_matched_landmarks = np.concatenate([matchs_to_contat])
+        all_matched_landmarks = np.concatenate(matchs_to_contat)
+
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
