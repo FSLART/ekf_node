@@ -42,6 +42,7 @@ class StateEstimator(Node):
 
         ### MOTOR SPEED VARIABLE ###
         self.angular_velocity = 0.0  # Initialize motor speed variable
+        self.last_rpm = 0.0 # Initialize a safety measure for the speed
 
 
         ### DECLARING PARAMETERS ###
@@ -88,8 +89,15 @@ class StateEstimator(Node):
         if(self.ekf is None):
             self.intialize_ekf()
         
+        #Validate the rpm
+        if(v_msg.rpm > 4000):
+            rpm = self.last_rpm
+        else:
+            rpm = v_msg.rpm
+            self.last_rpm =rpm
+
         #Convert the rpm's to m/s
-        ms_speed = self.tire_perimeter * (v_msg.rpm/self.transmission_ratio/60.0)
+        ms_speed = self.tire_perimeter * (rpm/self.transmission_ratio/60.0)
 
         # Get current angular velocity from IMU
         omega_z = self.angular_velocity 
