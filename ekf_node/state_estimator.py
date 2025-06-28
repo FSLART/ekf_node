@@ -130,14 +130,18 @@ class StateEstimator(Node):
         plt.draw()
         plt.pause(0.001)
 
+        # Publish the new state
+        self.position_publish()
 
     def update_callback(self, obs_msg):
+        '''
         if(self.ekf is None):
             self.intialize_ekf()
         self.ekf.update(obs_msg)
 
         # publish the new state
         self.position_publish()
+        '''
 
     def position_publish(self):
         # Create a new PoseStamped mission
