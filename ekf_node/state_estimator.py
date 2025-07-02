@@ -88,13 +88,8 @@ class StateEstimator(Node):
     def predict_callback(self, v_msg):
         if(self.ekf is None):
             self.intialize_ekf()
-        
-        #Validate the rpm
-        if(v_msg.rpm > 4000):
-            rpm = self.last_rpm
-        else:
-            rpm = v_msg.rpm
-            self.last_rpm =rpm
+
+        rpm = v_msg.rpm
 
         #Convert the rpm's to m/s
         ms_speed = self.tire_perimeter * (rpm/self.transmission_ratio/60.0)
@@ -130,18 +125,18 @@ class StateEstimator(Node):
         plt.draw()
         plt.pause(0.001)
 
-        # Publish the new state
+        #Publish the new state
         self.position_publish()
 
     def update_callback(self, obs_msg):
-        '''
+        
         if(self.ekf is None):
             self.intialize_ekf()
         self.ekf.update(obs_msg)
 
         # publish the new state
         self.position_publish()
-        '''
+        
 
     def position_publish(self):
         # Create a new PoseStamped mission
@@ -153,7 +148,7 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[0.0], [0.0], [0.0]])  # Float dtype
+        initial_state = np.array([[-15.0], [0.0], [0.0]])  # Float dtype
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
         wheelbase = 1.55
         self.ekf = EKF(initial_state, process_noise)

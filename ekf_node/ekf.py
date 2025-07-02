@@ -17,10 +17,10 @@ class EKF(object):
         self.Fx = np.eye(3)
 
         #Landmarks
-        self.blue_cones_indices = {}
-        self.yellow_cones_indices = {}
-        self.orange_cones_indices = {}
-        self.orange_big_cones_indices = {}
+        self.blue_cones_indices = []
+        self.yellow_cones_indices = []
+        self.orange_cones_indices = []
+        self.orange_big_cones_indices = []
         self.n_landmarks = 0
 
         # Ensure initial_state is float to avoid dtype issues
@@ -189,19 +189,19 @@ class EKF(object):
 
         for i, cords in enumerate(yellow_cones_converted_predicted_pose_keys):
             if matched_yellow_cones[i] == -1:
-                new_yellow_cones.append(yellow_cones_converted_predicted_pose[tuple(cords)])
+                new_yellow_cones.append(tuple(cords))
 
         for i, cords in enumerate(blue_cones_converted_predicted_pose_keys):
             if matched_blue_cones[i] == -1:
-                new_blue_cones.append(blue_cones_converted_predicted_pose[tuple(cords)])
+                new_blue_cones.append(tuple(cords))
 
         for i, cords in enumerate(orange_cones_converted_predicted_pose_keys):
             if matched_orange_cones[i] == -1:
-                new_orange_cones.append(orange_cones_converted_predicted_pose[tuple(cords)])
+                new_orange_cones.append(tuple(cords))
 
         for i, cords in enumerate(orange_big_cones_converted_predicted_pose_keys):
             if matched_orange_big_cones[i] == -1:
-                new_orange_big_cones.append(orange_big_cones_converted_predicted_pose[tuple(cords)])
+                new_orange_big_cones.append(tuple(cords))
 
 
         ### MEASUREMENT UPDATE ###
@@ -238,7 +238,7 @@ class EKF(object):
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
-            self.logger.info(f"Updating with landmark {i} at index {lidx} with coordinates {all_cones[i]}")
+            #self.logger.info(f"Updating with landmark {i} at index {lidx} with coordinates {all_cones[i]}")
             #Skip new cones
             if lidx == -1:
                 continue
@@ -264,6 +264,8 @@ class EKF(object):
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
         
+        self.logger.info(f"new blue cones: {new_blue_cones}")
+
         ### ADD NEW CONES ###
         self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
 
