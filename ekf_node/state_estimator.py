@@ -11,7 +11,13 @@ import matplotlib.pyplot as plt
 
 plt.ion()  # Enable interactive mode
 fig, ax = plt.subplots()
-sc, = ax.plot([], [], 'bo')  # 'bo' for blue dots
+sc, = ax.plot([], [], 'ro')  # 'bo' for blue dots
+
+bc, = ax.plot([], [], 'bo')  # blue cones
+yc, = ax.plot([], [], 'yo')  # yelow cones
+oc, = ax.plot([], [], 'go')  # orange cones
+obc, = ax.plot([], [], 'go')  # orange big cones
+
 line, = ax.plot([], [], 'b-')  # line to show trajectory
 br, = ax.plot([], [], 'ro')  # red dots for cones
 ax.set_xlim(-10, 10)  # You can adjust these as needed
@@ -25,6 +31,7 @@ ax.axis('equal')
 
 x_vals = []
 y_vals = []
+
 
 
 class StateEstimator(Node):
@@ -86,46 +93,53 @@ class StateEstimator(Node):
     
 
     def predict_callback(self, v_msg):
-        if(self.ekf is None):
+        if self.ekf is None:
             self.intialize_ekf()
 
         rpm = v_msg.rpm
 
-        #Convert the rpm's to m/s
-        ms_speed = self.tire_perimeter * (rpm/self.transmission_ratio/60.0)
+        # Convert the rpm's to m/s
+        ms_speed = self.tire_perimeter * (rpm / self.transmission_ratio / 60.0)
 
         # Get current angular velocity from IMU
-        omega_z = self.angular_velocity 
+        omega_z = self.angular_velocity
 
-        self.get_logger().info(f"IMU: {omega_z} SPEED: {ms_speed} ")
+        #self.get_logger().info(f"IMU: {omega_z} SPEED: {ms_speed}")
 
         # Call the predict method of the EKF
         self.ekf.predict(ms_speed, omega_z)
 
-        #plot the trajectory
+        # Update trajectory
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
 
+        # Get cone positions from the map
+        map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
+        map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
+        map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
+        map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
 
-        # Extract landmark coordinates from EKF state
-        landmarks = self.ekf.state[3:].reshape(-1, 2)  # skip x, y, theta, then reshape
+        # Update cone data
+        if map_blue_cones:
+            bc.set_data([cone[1] for cone in map_blue_cones], [cone[0] for cone in map_blue_cones])
+        if map_yellow_cones:
+            yc.set_data([cone[1] for cone in map_yellow_cones], [cone[0] for cone in map_yellow_cones])
+        if map_orange_cones:
+            oc.set_data([cone[1] for cone in map_orange_cones], [cone[0] for cone in map_orange_cones])
+        if map_orange_big_cones:
+            obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
 
-        # Separate landmarks by color using index lists
-        blue_cones = [landmarks[i] for i in self.ekf.blue_cones_indices]
-        yellow_cones = [landmarks[i] for i in self.ekf.yellow_cones_indices]
-        orange_cones = [landmarks[i] for i in self.ekf.orange_cones_indices]
-        orange_big_cones = [landmarks[i] for i in self.ekf.orange_big_cones_indices]
-
-        #br.set_data(y_cones, x_cones)
+        # Update trajectory plot
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
+
+        # Refresh plot
         ax.relim()
         ax.autoscale_view()
-        
         plt.draw()
         plt.pause(0.001)
 
-        #Publish the new state
+        # Publish the new state
         self.position_publish()
 
     def update_callback(self, obs_msg):
@@ -148,7 +162,7 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[-15.0], [0.0], [0.0]])  # Float dtype
+        initial_state = np.array([[0.0], [0.0], [0.0]])  # Float dtype #-15 PARA SKIDPAD
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
         wheelbase = 1.55
         self.ekf = EKF(initial_state, process_noise)

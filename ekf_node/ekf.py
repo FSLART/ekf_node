@@ -88,6 +88,8 @@ class EKF(object):
                 new_landmark = np.array([[landmark_x], [landmark_y]])
                 self.state = np.vstack((self.state, new_landmark))
 
+                #self.logger.info(f"New state after adding landmark: {self.state}")
+
                 # Expand covariance matrix with high initial uncertainty
                 landmark_cov = np.eye(2) * 1e3
                 top_right = np.zeros((self.P.shape[0], 2))
@@ -100,6 +102,7 @@ class EKF(object):
                 # Save this landmark's index
                 cone_index_list.append(self.n_landmarks)
                 self.n_landmarks += 1
+                self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
 
     def predict(self, v, w):
@@ -133,7 +136,11 @@ class EKF(object):
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
     def update(self,z):
+
+        #timer
+        init_time = time.time()
         
+                
         ### DATA ASSOCIATION ###
 
         map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
@@ -141,6 +148,7 @@ class EKF(object):
         map_orange_cones = self.get_cones_from_map(self.state, self.orange_cones_indices)
         map_orange_big_cones = self.get_cones_from_map(self.state, self.orange_big_cones_indices)
         #self.logger.info(f"Step 1 - Map Cones: Blue: {len(map_blue_cones)}, Yellow: {len(map_yellow_cones)}, Orange: {len(map_orange_cones)}, Orange Big: {len(map_orange_big_cones)}")
+
 
         #separates the cones in the map by color
         blue_cones_converted_predicted_pose = {}
@@ -165,9 +173,9 @@ class EKF(object):
                 orange_big_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
             #self.logger.info(f"Classica cones recebidos - Cone {i} at ({expected_obs_x}, {expected_obs_y}) with color {color}")
         
-        self.logger.info(f"Yellow Cones Converted Predicted Pose Size: {len(yellow_cones_converted_predicted_pose)}")
-        for key, value in yellow_cones_converted_predicted_pose.items():
-            self.logger.info(f"Yellow Cone: Position={key}, Index={value}")
+        #self.logger.info(f"Yellow Cones Converted Predicted Pose Size: {len(yellow_cones_converted_predicted_pose)}")
+        # for key, value in yellow_cones_converted_predicted_pose.items():
+        #     self.logger.info(f"Yellow Cone: Position={key}, Index={value}")
 
         #gets the global position of the cones
         yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
@@ -178,14 +186,17 @@ class EKF(object):
         #self.logger.info(f"Converted Predicted Pose Keys: Yellow: {len(yellow_cones_converted_predicted_pose_keys)}, Blue: {len(blue_cones_converted_predicted_pose_keys)}, Orange: {len(orange_cones_converted_predicted_pose_keys)}, Orange Big: {len(orange_big_cones_converted_predicted_pose_keys)}")
 
         #perform data association
+
         matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 0.5)
         matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 0.5)
         matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 0.5)
         matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 0.5)
+
         new_yellow_cones = []
         new_blue_cones = []
         new_orange_cones = []
         new_orange_big_cones = []
+
 
         for i, cords in enumerate(yellow_cones_converted_predicted_pose_keys):
             if matched_yellow_cones[i] == -1:
@@ -235,6 +246,7 @@ class EKF(object):
         #Get all of the indeces
         all_matched_landmarks = np.concatenate(matchs_to_contat)
 
+        init_aux_time = time.time()
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
@@ -247,14 +259,34 @@ class EKF(object):
             measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
             delta_zs[lidx] = measured_landmark - state_landmark # Difference between actual and estimated observation
 
-            # Helper matrices in computing the measurement update
-            Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
-            Fxj[self.n_state:self.n_state+2,self.n_state+2*lidx:self.n_state+2*lidx+2] = np.eye(2)
-            H = Fxj  # Directly map the observed landmark components in global frame
-            Hs[lidx] = H # Added to list of matrices
-            Ks[lidx] = self.P.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(self.P).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
+            # # Helper matrices in computing the measurement update
+            # Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
+            # Fxj[self.n_state:self.n_state+2,self.n_state+2*lidx:self.n_state+2*lidx+2] = np.eye(2)
+            # H = Fxj  # Directly map the observed landmark components in global frame
+            # #self.logger.info(f"H  = {H}")
+            # Hs[lidx] = H # Added to list of matrices
+
+            # self.logger.info(f"P= {self.P}\n transpose(H)= {np.transpose(H)}\n Q= {self.Q}")
+            # self.logger.info(f"inv = {np.linalg.inv(H.dot(self.P).dot(np.transpose(H)))}")
+
+            # Ks[lidx] = self.P.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(self.P).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
+
+            # Measurement Jacobian: observe only landmark components
+            H = np.zeros((2, self.state.shape[0]))
+            H[:, self.n_state + 2*lidx : self.n_state + 2*lidx + 2] = np.eye(2)
+            Hs[lidx] = H
+
+            # Kalman Gain
+            S = H @ self.P @ H.T + self.Q
+            K = self.P @ H.T @ np.linalg.inv(S)
+            Ks[lidx] = K
         
+        final_aux_time = time.time()
+        dt = final_aux_time - init_aux_time
+        self.logger.info(f"Time to compute Kalman Gain and Jacobian: {dt}")
         
+        init_aux_time = time.time()
+
         # After storing appropriate matrices, perform measurement update of mu and sigma
         state_offset = np.zeros(self.state.shape) # Offset to be added to state estimate
         covariance_factor = np.eye(self.P.shape[0]) # Factor to multiply state uncertainty
@@ -263,8 +295,17 @@ class EKF(object):
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
+
+        final_aux_time = time.time()
+        dt = final_aux_time - init_aux_time
+        self.logger.info(f"Time to update state and covariance: {dt}")
         
-        self.logger.info(f"new blue cones: {new_blue_cones}")
+        #self.logger.info(f"new blue cones: {new_blue_cones}")
+
+        final_time = time.time()
+        dt = final_time - init_time
+
+        self.logger.info(f"Entire update Time: {dt}")
 
         ### ADD NEW CONES ###
         self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
