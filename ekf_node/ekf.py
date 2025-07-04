@@ -137,9 +137,6 @@ class EKF(object):
 
     def update(self,z):
 
-        #timer
-        init_time = time.time()
-        
                 
         ### DATA ASSOCIATION ###
 
@@ -187,10 +184,10 @@ class EKF(object):
 
         #perform data association
 
-        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 0.5)
-        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 0.5)
-        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 0.5)
-        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 0.5)
+        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 1.0)
+        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 1.0)
+        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 1.0)
+        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 1.0)
 
         new_yellow_cones = []
         new_blue_cones = []
@@ -230,7 +227,7 @@ class EKF(object):
                 orange_cones_converted_predicted_pose_keys,
                 orange_big_cones_converted_predicted_pose_keys
             ] if len(arr) > 0
-]
+        ]  
         #Get all of the cones
         all_cones = np.concatenate(arrays_to_concat)
 
@@ -242,11 +239,10 @@ class EKF(object):
                 matched_orange_cones,
                 matched_orange_big_cones
             ] if len(arr) > 0
-]
+        ]
         #Get all of the indeces
         all_matched_landmarks = np.concatenate(matchs_to_contat)
 
-        init_aux_time = time.time()
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
@@ -281,31 +277,24 @@ class EKF(object):
             K = self.P @ H.T @ np.linalg.inv(S)
             Ks[lidx] = K
         
-        final_aux_time = time.time()
-        dt = final_aux_time - init_aux_time
-        self.logger.info(f"Time to compute Kalman Gain and Jacobian: {dt}")
-        
-        init_aux_time = time.time()
 
         # After storing appropriate matrices, perform measurement update of mu and sigma
         state_offset = np.zeros(self.state.shape) # Offset to be added to state estimate
         covariance_factor = np.eye(self.P.shape[0]) # Factor to multiply state uncertainty
+
+        init_time = time.time()
+
         for lidx in range(self.n_landmarks):
             state_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
 
-        final_aux_time = time.time()
-        dt = final_aux_time - init_aux_time
-        self.logger.info(f"Time to update state and covariance: {dt}")
-        
-        #self.logger.info(f"new blue cones: {new_blue_cones}")
-
         final_time = time.time()
         dt = final_time - init_time
+        self.logger.info(f"Measurement update took {dt:.4f} seconds")
 
-        self.logger.info(f"Entire update Time: {dt}")
+        #self.logger.info(f"new blue cones: {new_blue_cones}")
 
         ### ADD NEW CONES ###
         self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)

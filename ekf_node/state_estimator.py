@@ -5,6 +5,7 @@ import math
 from .ekf import EKF
 from lart_msgs.msg import GNSSINS, Dynamics, ConeArray
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+import csv
 
 from geometry_msgs.msg import Vector3Stamped, PoseStamped
 import matplotlib.pyplot as plt
@@ -167,13 +168,43 @@ class StateEstimator(Node):
         wheelbase = 1.55
         self.ekf = EKF(initial_state, process_noise)
 
+    def write_cones_to_csv(self):
+        # Collect cone data
+        blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
+        yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
+        orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
+        orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
+
+        # Write to CSV
+        with open('cones_coordinates.csv', mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Cone Type', 'X', 'Y'])
+            for cone in blue_cones:
+                writer.writerow(['Blue', cone[0], cone[1]])
+            for cone in yellow_cones:
+                writer.writerow(['Yellow', cone[0], cone[1]])
+            for cone in orange_cones:
+                writer.writerow(['Orange', cone[0], cone[1]])
+            for cone in orange_big_cones:
+                writer.writerow(['Orange Big', cone[0], cone[1]])
+
+    def destroy_node(self):
+        # Write cones to CSV before shutting down
+        if self.ekf:
+            self.write_cones_to_csv()
+        super().destroy_node()
+
 
 def main(args=None):
-    rclpy.init(args=args)
-    state_estimator = StateEstimator()
-    rclpy.spin(state_estimator)
-    state_estimator.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.init(args=args)
+        state_estimator = StateEstimator()
+        rclpy.spin(state_estimator)
+    except KeyboardInterrupt:
+        state_estimator.get_logger().info('State Estimator Node terminated.')
+    finally:    
+        state_estimator.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
