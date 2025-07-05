@@ -157,7 +157,7 @@ class StateEstimator(Node):
         
         self.ekf.update(obs_msg)
 
-        self.get_logger().info(f"Selected Cone: {self.ekf.state[3:5]}")
+        #self.get_logger().info(f"Selected Cone: {self.ekf.state[3:5]}")
 
         # publish the new state
         self.position_publish()

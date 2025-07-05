@@ -136,8 +136,7 @@ class EKF(object):
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
     def update(self,z):
-
-                
+         
         ### DATA ASSOCIATION ###
 
         map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
@@ -184,10 +183,10 @@ class EKF(object):
 
         #perform data association
 
-        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
-        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 2.0)
-        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 2.0)
-        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 2.0)
+        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 5.0)
+        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 5.0)
+        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 5.0)
+        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 5.0)
 
         new_yellow_cones = []
         new_blue_cones = []
@@ -252,6 +251,10 @@ class EKF(object):
                 continue
             
             state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the current estimated position of the landmark
+
+            # if lidx == 0:
+            #     self.logger.info(f"Updating with landmark {i} at index {lidx} and state_landmark {state_landmark}")
+
             measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
             delta_zs[lidx] = measured_landmark - state_landmark # Difference between actual and estimated observation
             H = np.zeros((2, self.state.shape[0]))
@@ -273,14 +276,21 @@ class EKF(object):
         for lidx in range(self.n_landmarks):
             state_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
+
+        # Antes de atualizar o estado    
+        if self.state.shape[0] > 3:
+            self.logger.info(f"Selected Cone before update: {self.state[3:5]}")
+
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
 
+        # Depois do update
+        if self.state.shape[0] > 3:
+            self.logger.info(f"Selected Cone after update: {self.state[3:5]}")
+
         final_time = time.time()
         dt = final_time - init_time
-        self.logger.info(f"Measurement update took {dt:.4f} seconds")
-
-        #self.logger.info(f"new blue cones: {new_blue_cones}")
+        #self.logger.info(f"Measurement update took {dt:.4f} seconds")
 
         ### ADD NEW CONES ###
         self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
