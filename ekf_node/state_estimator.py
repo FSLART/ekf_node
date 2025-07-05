@@ -131,6 +131,7 @@ class StateEstimator(Node):
         if map_orange_big_cones:
             obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
 
+        # The selected cone position
         sx = self.ekf.state[3]
         sy = self.ekf.state[4]
 
