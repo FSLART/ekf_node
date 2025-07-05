@@ -18,6 +18,7 @@ bc, = ax.plot([], [], 'bo')  # blue cones
 yc, = ax.plot([], [], 'yo')  # yelow cones
 oc, = ax.plot([], [], 'go')  # orange cones
 obc, = ax.plot([], [], 'go')  # orange big cones
+ssc, = ax.plot([], [], 'ro') #selected cone 
 
 line, = ax.plot([], [], 'b-')  # line to show trajectory
 br, = ax.plot([], [], 'ro')  # red dots for cones
@@ -130,6 +131,11 @@ class StateEstimator(Node):
         if map_orange_big_cones:
             obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
 
+        sx = self.ekf.state[3]
+        sy = self.ekf.state[4]
+
+        ssc.set_data(sy, sx)  # Update selected cone position
+
         # Update trajectory plot
         sc.set_data(y_vals, x_vals)
         line.set_data(y_vals, x_vals)
@@ -147,7 +153,10 @@ class StateEstimator(Node):
         
         if(self.ekf is None):
             self.intialize_ekf()
+        
         self.ekf.update(obs_msg)
+
+        self.get_logger().info(f"Selected Cone: {self.ekf.state[3:5]}")
 
         # publish the new state
         self.position_publish()

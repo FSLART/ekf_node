@@ -184,10 +184,10 @@ class EKF(object):
 
         #perform data association
 
-        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 1.0)
-        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 1.0)
-        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 1.0)
-        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 1.0)
+        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
+        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 2.0)
+        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 2.0)
+        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 2.0)
 
         new_yellow_cones = []
         new_blue_cones = []
@@ -254,20 +254,6 @@ class EKF(object):
             state_landmark = self.state[self.n_state+lidx*2:self.n_state+lidx*2+2] # Get the current estimated position of the landmark
             measured_landmark = np.array(all_cones[i]).reshape((2, 1)) # Get the measured value but with the same shape
             delta_zs[lidx] = measured_landmark - state_landmark # Difference between actual and estimated observation
-
-            # # Helper matrices in computing the measurement update
-            # Fxj = np.block([[self.Fx],[np.zeros((2,self.Fx.shape[1]))]])
-            # Fxj[self.n_state:self.n_state+2,self.n_state+2*lidx:self.n_state+2*lidx+2] = np.eye(2)
-            # H = Fxj  # Directly map the observed landmark components in global frame
-            # #self.logger.info(f"H  = {H}")
-            # Hs[lidx] = H # Added to list of matrices
-
-            # self.logger.info(f"P= {self.P}\n transpose(H)= {np.transpose(H)}\n Q= {self.Q}")
-            # self.logger.info(f"inv = {np.linalg.inv(H.dot(self.P).dot(np.transpose(H)))}")
-
-            # Ks[lidx] = self.P.dot(np.transpose(H)).dot(np.linalg.inv(H.dot(self.P).dot(np.transpose(H)) + self.Q)) # Add to list of matrices
-
-            # Measurement Jacobian: observe only landmark components
             H = np.zeros((2, self.state.shape[0]))
             H[:, self.n_state + 2*lidx : self.n_state + 2*lidx + 2] = np.eye(2)
             Hs[lidx] = H
