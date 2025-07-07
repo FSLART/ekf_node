@@ -136,6 +136,25 @@ class EKF(object):
                 self.n_landmarks += 1
                 self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
+    def data_augmentation_but_with_all_cones(self, new_cones):
+        for cone_coords in new_cones:
+            landmark_x, landmark_y = cone_coords
+
+            #Add landmark to state
+            new_landmark = np.array([[landmark_x], [landmark_y]])
+            self.state = np.vstack((self.state, new_landmark))
+
+            landmark_cov = np.eye(2) * 1e3  # High initial uncertainty
+            top_right = np.zeros((self.P.shape[0], 2))
+            bottom_left = np.zeros((2, self.P.shape[1]))
+            self.P = np.block([
+                [self.P,        top_right],
+                [bottom_left,   landmark_cov]
+            ])
+
+            # Save this landmark's
+            self.n_landmarks += 1
+            self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
     def predict(self, v, w):
 
@@ -170,11 +189,18 @@ class EKF(object):
     def update(self,z):
          
         ### DATA ASSOCIATION ###
+        
+        ## TODOS OS CONES
+        all_maped_cones = []
+        for i in self.n_landmarks:
+            cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
+            all_maped_cones.append(cone)
 
-        map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
-        map_yellow_cones = self.get_cones_from_map(self.state, self.yellow_cones_indices)
-        map_orange_cones = self.get_cones_from_map(self.state, self.orange_cones_indices)
-        map_orange_big_cones = self.get_cones_from_map(self.state, self.orange_big_cones_indices)
+        ## DIVIDIDOS POR COR
+        # map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
+        # map_yellow_cones = self.get_cones_from_map(self.state, self.yellow_cones_indices)
+        # map_orange_cones = self.get_cones_from_map(self.state, self.orange_cones_indices)
+        # map_orange_big_cones = self.get_cones_from_map(self.state, self.orange_big_cones_indices)
         #self.logger.info(f"Step 1 - Map Cones: Blue: {len(map_blue_cones)}, Yellow: {len(map_yellow_cones)}, Orange: {len(map_orange_cones)}, Orange Big: {len(map_orange_big_cones)}")
 
 
@@ -193,56 +219,76 @@ class EKF(object):
                 continue
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
-            if color.data == 1:
-                yellow_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
-            elif color.data == 2:
-                blue_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
-            elif color.data == 3:
-                orange_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
-            elif color.data == 4:
-                orange_big_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
-            #self.logger.info(f"Classica cones recebidos - Cone {i} at ({expected_obs_x}, {expected_obs_y}) with color {color}")
-        
-        #self.logger.info(f"Yellow Cones Converted Predicted Pose Size: {len(yellow_cones_converted_predicted_pose)}")
-        # for key, value in yellow_cones_converted_predicted_pose.items():
-        #     self.logger.info(f"Yellow Cone: Position={key}, Index={value}")
+
+            #TUDO AO MOLHO E FE EM DEUS
+            all_cones_converted_predicted_pose = {
+                (float(expected_obs_x), float(expected_obs_y)): i
+            }
+
+            # CONES DIVIDIDOS POR COR
+
+            # if color.data == 1:
+            #     yellow_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            # elif color.data == 2:
+            #     blue_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            # elif color.data == 3:
+            #     orange_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
+            # elif color.data == 4:
+            #     orange_big_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i
 
         #gets the global position of the cones
-        yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
-        blue_cones_converted_predicted_pose_keys = np.array(list(blue_cones_converted_predicted_pose.keys()))
-        orange_cones_converted_predicted_pose_keys = np.array(list(orange_cones_converted_predicted_pose.keys()))
-        orange_big_cones_converted_predicted_pose_keys = np.array(list(orange_big_cones_converted_predicted_pose.keys()))
         
-        #self.logger.info(f"Converted Predicted Pose Keys: Yellow: {len(yellow_cones_converted_predicted_pose_keys)}, Blue: {len(blue_cones_converted_predicted_pose_keys)}, Orange: {len(orange_cones_converted_predicted_pose_keys)}, Orange Big: {len(orange_big_cones_converted_predicted_pose_keys)}")
+        ##TODOS OS CONES BANGERRRR
+        all_cones_converted_predicted_pose_keys = np.array(list(all_cones_converted_predicted_pose.keys()))
+
+        ##  DIVIDIDOS POR COR
+        # yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
+        # blue_cones_converted_predicted_pose_keys = np.array(list(blue_cones_converted_predicted_pose.keys()))
+        # orange_cones_converted_predicted_pose_keys = np.array(list(orange_cones_converted_predicted_pose.keys()))
+        # orange_big_cones_converted_predicted_pose_keys = np.array(list(orange_big_cones_converted_predicted_pose.keys()))
+        
 
         #perform data association
 
-        matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
-        matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 2.0)
-        matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 2.0)
-        matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 2.0)
+        ## TODOS OS CONES
+        matched_all_cones = self.data_association(all_maped_cones, all_cones_converted_predicted_pose_keys, 2.0)
 
-        new_yellow_cones = []
-        new_blue_cones = []
-        new_orange_cones = []
-        new_orange_big_cones = []
+        ## DIVIDIDOS POR COR
+
+        # matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
+        # matched_blue_cones = self.data_association(map_blue_cones, blue_cones_converted_predicted_pose_keys, 2.0)
+        # matched_orange_cones = self.data_association(map_orange_cones, orange_cones_converted_predicted_pose_keys, 2.0)
+        # matched_orange_big_cones = self.data_association(map_orange_big_cones, orange_big_cones_converted_predicted_pose_keys, 2.0)
+
+        ## TODOS OS CONES
+        all_new_cones = []
+        for i, cords in enumerate(all_cones_converted_predicted_pose_keys):
+            if matched_all_cones[i] == -1:
+                all_new_cones.append(tuple(cords))
+
+        ## DIVIDIDOS POR COR
+
+        # new_yellow_cones = []
+        # new_blue_cones = []
+        # new_orange_cones = []
+        # new_orange_big_cones = []
 
 
-        for i, cords in enumerate(yellow_cones_converted_predicted_pose_keys):
-            if matched_yellow_cones[i] == -1:
-                new_yellow_cones.append(tuple(cords))
+        # for i, cords in enumerate(yellow_cones_converted_predicted_pose_keys):
+        #     if matched_yellow_cones[i] == -1:
+        #         new_yellow_cones.append(tuple(cords))
 
-        for i, cords in enumerate(blue_cones_converted_predicted_pose_keys):
-            if matched_blue_cones[i] == -1:
-                new_blue_cones.append(tuple(cords))
+        # for i, cords in enumerate(blue_cones_converted_predicted_pose_keys):
+        #     if matched_blue_cones[i] == -1:
+        #         new_blue_cones.append(tuple(cords))
 
-        for i, cords in enumerate(orange_cones_converted_predicted_pose_keys):
-            if matched_orange_cones[i] == -1:
-                new_orange_cones.append(tuple(cords))
+        # for i, cords in enumerate(orange_cones_converted_predicted_pose_keys):
+        #     if matched_orange_cones[i] == -1:
+        #         new_orange_cones.append(tuple(cords))
 
-        for i, cords in enumerate(orange_big_cones_converted_predicted_pose_keys):
-            if matched_orange_big_cones[i] == -1:
-                new_orange_big_cones.append(tuple(cords))
+        # for i, cords in enumerate(orange_big_cones_converted_predicted_pose_keys):
+        #     if matched_orange_big_cones[i] == -1:
+        #         new_orange_big_cones.append(tuple(cords))
 
 
         ### MEASUREMENT UPDATE ###
@@ -253,28 +299,32 @@ class EKF(object):
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         
         #Only chose non empty cone arrays
-        arrays_to_concat = [
-            np.array(arr) for arr in [
-                yellow_cones_converted_predicted_pose_keys,
-                blue_cones_converted_predicted_pose_keys,
-                orange_cones_converted_predicted_pose_keys,
-                orange_big_cones_converted_predicted_pose_keys
-            ] if len(arr) > 0
-        ]  
+        # arrays_to_concat = [
+        #     np.array(arr) for arr in [
+        #         yellow_cones_converted_predicted_pose_keys,
+        #         blue_cones_converted_predicted_pose_keys,
+        #         orange_cones_converted_predicted_pose_keys,
+        #         orange_big_cones_converted_predicted_pose_keys
+        #     ] if len(arr) > 0
+        # ]  
+
         #Get all of the cones
-        all_cones = np.concatenate(arrays_to_concat)
+        #all_cones = np.concatenate(arrays_to_concat)
+        all_cones = all_cones_converted_predicted_pose_keys
 
         #Only Get non empty match arrays
-        matchs_to_contat = [
-            np.array(arr) for arr in [
-                matched_yellow_cones,
-                matched_blue_cones,
-                matched_orange_cones,
-                matched_orange_big_cones
-            ] if len(arr) > 0
-        ]
+        # matchs_to_contat = [
+        #     np.array(arr) for arr in [
+        #         matched_yellow_cones,
+        #         matched_blue_cones,
+        #         matched_orange_cones,
+        #         matched_orange_big_cones
+        #     ] if len(arr) > 0
+        # ]
+
         #Get all of the indeces
-        all_matched_landmarks = np.concatenate(matchs_to_contat)
+        #all_matched_landmarks = np.concatenate(matchs_to_contat)
+        all_matched_landmarks = matched_all_cones
 
 
         #For each old observation
@@ -327,5 +377,6 @@ class EKF(object):
         #self.logger.info(f"Measurement update took {dt:.4f} seconds")
 
         ### ADD NEW CONES ###
-        self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
+        #self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
+        self.data_augmentation_but_with_all_cones(all_new_cones)
 
