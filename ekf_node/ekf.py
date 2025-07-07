@@ -42,65 +42,65 @@ class EKF(object):
             cones.append(cone)
         return cones
 
-    def data_association(self, cones, observations, threshold):
-        """
-        cones         : (M, 2) array - landmarks already in the map (global frame)
-        observations  : (N, 2) array - newly observed cones (global frame)
-        threshold     : scalar  - max Euclidian distance [m] for a valid match
-
-        Returns
-        -------
-        idx_map : list length N
-                For each observation: landmark index if matched, else -1.
-        """
-        # Nothing to match against → everything is a new cone
-        if len(cones) == 0:
-            return [-1] * len(observations)
-
-        # No observations of this colour in the current frame
-        if len(observations) == 0:
-            return []
-
-        cones        = np.asarray(cones,        dtype=float)
-        observations = np.asarray(observations, dtype=float)
-
-        tree = KDTree(cones)
-
-        # k=1 → nearest neighbour; dists/idx are shape (N, 1)
-        dists, idx   = tree.query(observations, k=1)
-
-        # Decide if the NN is close enough
-        idx_map = [int(i) if d <= threshold else -1
-                for d, i in zip(dists[:, 0], idx[:, 0])]
-        return idx_map
-    
     # def data_association(self, cones, observations, threshold):
-    #     '''
-    #     Perform data association between cones and observations.
-        
-    #     Args:
-    #         cones (list): List of cone positions (2D coordinates).
-    #         observations (list): List of observed positions (2D coordinates).
-    #         threshold (float): Max distance for association.
-        
-    #     Returns:
-    #         array: array the same size as observations, for each observation it returns the index of the landmark that is already in the map, -1 if its not there yet
-    #     '''
+    #     """
+    #     cones         : (M, 2) array - landmarks already in the map (global frame)
+    #     observations  : (N, 2) array - newly observed cones (global frame)
+    #     threshold     : scalar  - max Euclidian distance [m] for a valid match
 
+    #     Returns
+    #     -------
+    #     idx_map : list length N
+    #             For each observation: landmark index if matched, else -1.
+    #     """
+    #     # Nothing to match against → everything is a new cone
     #     if len(cones) == 0:
     #         return [-1] * len(observations)
-        
-    #     matched_cones = []
+
+    #     # No observations of this colour in the current frame
+    #     if len(observations) == 0:
+    #         return []
+
+    #     cones        = np.asarray(cones,        dtype=float)
+    #     observations = np.asarray(observations, dtype=float)
+
     #     tree = KDTree(cones)
 
-    #     for obs in observations:
-    #         indices = tree.query_radius([obs], r=threshold)[0]
-    #         if len(indices) > 0:
-    #             matched_cones.append(indices[0]) 
-    #         else:
-    #             matched_cones.append(-1)
+    #     # k=1 → nearest neighbour; dists/idx are shape (N, 1)
+    #     dists, idx   = tree.query(observations, k=1)
+
+    #     # Decide if the NN is close enough
+    #     idx_map = [int(i) if d <= threshold else -1
+    #             for d, i in zip(dists[:, 0], idx[:, 0])]
+    #     return idx_map
+    
+    def data_association(self, cones, observations, threshold):
+        '''
+        Perform data association between cones and observations.
+        
+        Args:
+            cones (list): List of cone positions (2D coordinates).
+            observations (list): List of observed positions (2D coordinates).
+            threshold (float): Max distance for association.
+        
+        Returns:
+            array: array the same size as observations, for each observation it returns the index of the landmark that is already in the map, -1 if its not there yet
+        '''
+
+        if len(cones) == 0:
+            return [-1] * len(observations)
+        
+        matched_cones = []
+        tree = KDTree(cones)
+
+        for obs in observations:
+            indices = tree.query_radius([obs], r=threshold)[0]
+            if len(indices) > 0:
+                matched_cones.append(indices[0]) 
+            else:
+                matched_cones.append(-1)
             
-    #     return matched_cones
+        return matched_cones
 
     def data_augmentation(self, new_blue_cones, new_yellow_cones, new_orange_cones, new_orange_big_cones):
 
@@ -209,21 +209,20 @@ class EKF(object):
         yellow_cones_converted_predicted_pose = {}
         orange_cones_converted_predicted_pose = {}
         orange_big_cones_converted_predicted_pose = {}
+        all_cones_converted_predicted_pose = {}
         pose_x, pose_y, pose_theta = self.state[0], self.state[1], self.state[2]
 
         for i,obs in enumerate(z.cones):
             obs_x, obs_y = obs.position.x, obs.position.y
             color = obs.class_type
             # Calculate the expected observation #TODO:review
-            if (sqrt(obs_x**2 + obs_y**2) > 10.0 or abs(obs_y) > 3.0):
+            if (sqrt(obs_x**2 + obs_y**2) > 10.0 or abs(obs_y) > 4.0):
                 continue
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
 
             #TUDO AO MOLHO E FE EM DEUS
-            all_cones_converted_predicted_pose = {
-                (float(expected_obs_x), float(expected_obs_y)): i
-            }
+            all_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i 
 
             # CONES DIVIDIDOS POR COR
 
@@ -251,8 +250,8 @@ class EKF(object):
         #perform data association
 
         ## TODOS OS CONES
-        matched_all_cones = self.data_association(all_maped_cones, all_cones_converted_predicted_pose_keys, 2.0)
-
+        matched_all_cones = self.data_association(all_maped_cones, all_cones_converted_predicted_pose_keys, 2.2)
+        self.logger.info(f"Step 2 - matched Cones: {matched_all_cones}")
         ## DIVIDIDOS POR COR
 
         # matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
@@ -265,7 +264,10 @@ class EKF(object):
         for i, cords in enumerate(all_cones_converted_predicted_pose_keys):
             if matched_all_cones[i] == -1:
                 all_new_cones.append(tuple(cords))
+            # else:
+            #     self.logger.info(f"Matched cone at {tuple(cords)} with index {matched_all_cones[i]}")
 
+        # self.logger.info(f"Step 2 - received Cones: {len(z.cones)} new cones detected")
         ## DIVIDIDOS POR COR
 
         # new_yellow_cones = []
