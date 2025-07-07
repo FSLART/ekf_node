@@ -121,8 +121,6 @@ class StateEstimator(Node):
         # map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
         # map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
 
-        map_all_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.all_cones_indices)
-
         # Update cone data
         # if map_blue_cones:
         #     bc.set_data([cone[1] for cone in map_blue_cones], [cone[0] for cone in map_blue_cones])
@@ -136,7 +134,7 @@ class StateEstimator(Node):
         # Update cone data
         all_maped_cones = []
         for i in range(self.ekf.n_landmarks):
-            cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
+            cone = (self.state[self.ekf.n_state+2*i,0], self.state[self.ekf.n_state+2*i+1,0])
             all_maped_cones.append(cone)
 
         bc.set_data([cone[1] for cone in all_maped_cones], [cone[0] for cone in all_maped_cones])
@@ -192,7 +190,7 @@ class StateEstimator(Node):
         # Collect cone data
         all_maped_cones = []
         for i in range(self.ekf.n_landmarks):
-            cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
+            cone = (self.ekf.state[self.n_state+2*i,0], self.ekf.state[self.n_state+2*i+1,0])
             all_maped_cones.append(cone)
 
         # blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
