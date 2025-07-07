@@ -14,11 +14,11 @@ plt.ion()  # Enable interactive mode
 fig, ax = plt.subplots()
 sc, = ax.plot([], [], 'ro')  # 'bo' for blue dots
 
-bc, = ax.plot([], [], 'bo')  # blue cones
-yc, = ax.plot([], [], 'yo')  # yelow cones
-oc, = ax.plot([], [], 'go')  # orange cones
-obc, = ax.plot([], [], 'go')  # orange big cones
-ssc, = ax.plot([], [], 'ro') #selected cone 
+bc, = ax.plot([], [], 'o', color='#203cd6')  # blue cones
+yc, = ax.plot([], [], 'o', color='#e2b80a')  # yelow cones
+oc, = ax.plot([], [], 'o', color='#fea92e')  # orange cones
+obc, = ax.plot([], [], 'o', color='#f25b05')  # orange big cones
+ssc, = ax.plot([], [], 'o', color='#f254f0') #selected cone 
 
 line, = ax.plot([], [], 'b-')  # line to show trajectory
 br, = ax.plot([], [], 'ro')  # red dots for cones
@@ -140,10 +140,10 @@ class StateEstimator(Node):
         # bc.set_data([cone[1] for cone in all_maped_cones], [cone[0] for cone in all_maped_cones])
 
         # The selected cone position
-        sx = self.ekf.state[3]
-        sy = self.ekf.state[4]
+        # sx = self.ekf.state[3]
+        # sy = self.ekf.state[4]
 
-        ssc.set_data(sy, sx)  # Update selected cone position
+        # ssc.set_data(sy, sx)  # Update selected cone position
 
         # Update trajectory plot
         sc.set_data(y_vals, x_vals)

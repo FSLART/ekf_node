@@ -275,7 +275,7 @@ class EKF(object):
         for i, cords in enumerate(all_cones_converted_predicted_pose_keys):
             if matched_all_cones[i] == -1:
                 all_new_cones.append(tuple(cords))
-                all_new_cones_color.append(all_cones_converted_predicted_pose_colors[cords])
+                all_new_cones_color.append(all_cones_converted_predicted_pose_colors[i])
             # else:
             #     self.logger.info(f"Matched cone at {tuple(cords)} with index {matched_all_cones[i]}")
 
