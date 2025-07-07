@@ -136,8 +136,8 @@ class EKF(object):
                 self.n_landmarks += 1
                 self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
-    def data_augmentation_but_with_all_cones(self, new_cones):
-        for cone_coords in new_cones:
+    def data_augmentation_but_with_all_cones(self, new_cones, new_cones_color):
+        for i, cone_coords in enumerate(new_cones):
             landmark_x, landmark_y = cone_coords
 
             #Add landmark to state
@@ -153,6 +153,15 @@ class EKF(object):
             ])
 
             # Save this landmark's
+            if new_cones_color[i] == 1:  # Yellow
+                self.yellow_cones_indices.append(self.n_landmarks)
+            elif new_cones_color[i] == 2:  # Blue
+                self.blue_cones_indices.append(self.n_landmarks)
+            elif new_cones_color[i] == 3:  # Orange
+                self.orange_cones_indices.append(self.n_landmarks)
+            elif new_cones_color[i] == 4:  # Orange Big
+                self.orange_big_cones_indices.append(self.n_landmarks)
+
             self.n_landmarks += 1
             self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
@@ -191,10 +200,10 @@ class EKF(object):
         ### DATA ASSOCIATION ###
         
         ## TODOS OS CONES
-        all_maped_cones = []
+        all_mapped_cones = []
         for i in range(self.n_landmarks):
             cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
-            all_maped_cones.append(cone)
+            all_mapped_cones.append(cone)
 
         ## DIVIDIDOS POR COR
         # map_blue_cones = self.get_cones_from_map(self.state, self.blue_cones_indices)
@@ -215,14 +224,14 @@ class EKF(object):
         for i,obs in enumerate(z.cones):
             obs_x, obs_y = obs.position.x, obs.position.y
             color = obs.class_type
-            # Calculate the expected observation #TODO:review
+            # Calculate the expected observation 
             if (sqrt(obs_x**2 + obs_y**2) > 10.0 or abs(obs_y) > 4.0):
                 continue
             expected_obs_x = pose_x + np.cos(pose_theta) * obs_x - np.sin(pose_theta) * obs_y
             expected_obs_y = pose_y + np.sin(pose_theta) * obs_x + np.cos(pose_theta) * obs_y
 
             #TUDO AO MOLHO E FE EM DEUS
-            all_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = i 
+            all_cones_converted_predicted_pose[(float(expected_obs_x), float(expected_obs_y))] = color.data
 
             # CONES DIVIDIDOS POR COR
 
@@ -239,6 +248,7 @@ class EKF(object):
         
         ##TODOS OS CONES BANGERRRR
         all_cones_converted_predicted_pose_keys = np.array(list(all_cones_converted_predicted_pose.keys()))
+        all_cones_converted_predicted_pose_colors = np.array(list(all_cones_converted_predicted_pose.values()))
 
         ##  DIVIDIDOS POR COR
         # yellow_cones_converted_predicted_pose_keys = np.array(list(yellow_cones_converted_predicted_pose.keys()))
@@ -250,7 +260,7 @@ class EKF(object):
         #perform data association
 
         ## TODOS OS CONES
-        matched_all_cones = self.data_association(all_maped_cones, all_cones_converted_predicted_pose_keys, 2.2)
+        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, 2.2)
         self.logger.info(f"Step 2 - matched Cones: {matched_all_cones}")
         ## DIVIDIDOS POR COR
 
@@ -261,9 +271,11 @@ class EKF(object):
 
         ## TODOS OS CONES
         all_new_cones = []
+        all_new_cones_color = []
         for i, cords in enumerate(all_cones_converted_predicted_pose_keys):
             if matched_all_cones[i] == -1:
                 all_new_cones.append(tuple(cords))
+                all_new_cones_color.append(all_cones_converted_predicted_pose_colors[cords])
             # else:
             #     self.logger.info(f"Matched cone at {tuple(cords)} with index {matched_all_cones[i]}")
 
@@ -363,16 +375,8 @@ class EKF(object):
             state_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
 
-        # Antes de atualizar o estado    
-        if self.state.shape[0] > 3:
-            self.logger.info(f"Selected Cone before update: {self.state[3:5]}")
-
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
-
-        # Depois do update
-        if self.state.shape[0] > 3:
-            self.logger.info(f"Selected Cone after update: {self.state[3:5]}")
 
         final_time = time.time()
         dt = final_time - init_time
@@ -380,5 +384,5 @@ class EKF(object):
 
         ### ADD NEW CONES ###
         #self.data_augmentation(new_blue_cones,new_yellow_cones,new_orange_cones,new_orange_big_cones)
-        self.data_augmentation_but_with_all_cones(all_new_cones)
+        self.data_augmentation_but_with_all_cones(all_new_cones, all_new_cones_color)
 
