@@ -135,7 +135,7 @@ class StateEstimator(Node):
 
         # Update cone data
         all_maped_cones = []
-        for i in range(self.n_landmarks):
+        for i in range(self.ekf.n_landmarks):
             cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
             all_maped_cones.append(cone)
 
@@ -191,7 +191,7 @@ class StateEstimator(Node):
     def write_cones_to_csv(self):
         # Collect cone data
         all_maped_cones = []
-        for i in range(self.n_landmarks):
+        for i in range(self.ekf.n_landmarks):
             cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
             all_maped_cones.append(cone)
 
