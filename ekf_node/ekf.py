@@ -245,7 +245,6 @@ class EKF(object):
 
         ### MEASUREMENT UPDATE ###
 
-        rx,ry,theta = self.state[0,0],self.state[1,0],self.state[2,0] # robot position (x,y) and heading 
         delta_zs = [np.zeros((2,1)) for lidx in range(self.n_landmarks)]  # Place holder for each cone (landmark)
         Ks = [np.zeros((self.state.shape[0],2)) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
         Hs = [np.zeros((2,self.state.shape[0])) for lidx in range(self.n_landmarks)] # A list of matrices stored for use outside the measurement for loop
@@ -255,7 +254,6 @@ class EKF(object):
 
         #all_matched_landmarks = np.concatenate(matchs_to_contat)
         all_matched_landmarks = matched_all_cones
-
 
         #For each old observation
         for i,lidx in enumerate(all_matched_landmarks):
