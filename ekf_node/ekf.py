@@ -218,7 +218,7 @@ class EKF(object):
                     to_remove.add(j)
 
         # Remove outliers with high covariance
-        max_cov = 5.0  # Example threshold
+        max_cov = 2.0  # Example threshold
         for i in range(self.n_landmarks):
             cov = self.P[self.n_state+2*i:self.n_state+2*i+2, self.n_state+2*i:self.n_state+2*i+2]
             if np.trace(cov) > max_cov:
