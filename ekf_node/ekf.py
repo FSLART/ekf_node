@@ -107,7 +107,7 @@ class EKF(object):
             elif color == 4:  # Orange Big
                 available_cones = self.orange_big_cones_indices
 
-            self.logger.info(f"yellow_cones_indices: {self.yellow_cones_indices}, blue_cones_indices: {self.blue_cones_indices}, orange_cones_indices: {self.orange_cones_indices}, orange_big_cones_indices: {self.orange_big_cones_indices}")
+            #self.logger.info(f"yellow_cones_indices: {self.yellow_cones_indices}, blue_cones_indices: {self.blue_cones_indices}, orange_cones_indices: {self.orange_cones_indices}, orange_big_cones_indices: {self.orange_big_cones_indices}")
 
             if len(available_cones) == 0:
                 matched_cones.append(-1)
@@ -188,6 +188,58 @@ class EKF(object):
             self.n_landmarks += 1
             self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
 
+    def post_processing(self):
+        # Find duplicate cones
+        threshold = 2.2
+        to_remove = set()
+        for i in range(self.n_landmarks):
+            if i in to_remove:
+                continue
+            xi = self.state[self.n_state+2*i, 0]
+            yi = self.state[self.n_state+2*i+1, 0]
+            # Determine color of cone i
+            if i in self.yellow_cones_indices:
+                color_indices = self.yellow_cones_indices
+            elif i in self.blue_cones_indices:
+                color_indices = self.blue_cones_indices
+            elif i in self.orange_cones_indices:
+                color_indices = self.orange_cones_indices
+            elif i in self.orange_big_cones_indices:
+                color_indices = self.orange_big_cones_indices
+            else:
+                continue  # Skip if color not found
+
+            for j in range(i+1, self.n_landmarks):
+                if j in to_remove or j not in color_indices:
+                    continue
+                xj = self.state[self.n_state+2*j, 0]
+                yj = self.state[self.n_state+2*j+1, 0]
+                if np.hypot(xi-xj, yi-yj) < threshold:
+                    to_remove.add(j)
+
+        # Remove outliers with high covariance
+        max_cov = 5.0  # Example threshold
+        for i in range(self.n_landmarks):
+            cov = self.P[self.n_state+2*i:self.n_state+2*i+2, self.n_state+2*i:self.n_state+2*i+2]
+            if np.trace(cov) > max_cov:
+                #Remove landmark
+                if i not in to_remove:
+                    to_remove.add(i)
+
+        # Remove duplicates and outliers
+        for idx in to_remove:
+            if idx in self.yellow_cones_indices:
+                self.yellow_cones_indices.remove(idx)
+            elif idx in self.blue_cones_indices:
+                self.blue_cones_indices.remove(idx)
+            elif idx in self.orange_cones_indices:
+                self.orange_cones_indices.remove(idx)
+            elif idx in self.orange_big_cones_indices:
+                self.orange_big_cones_indices.remove(idx)
+
+        
+        
+        
     def predict(self, v, w):
 
         # Getting the time difference
@@ -219,7 +271,10 @@ class EKF(object):
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
     def update(self,z):
-         
+        ### PARAMETERS ###
+
+        threshold = 2.2
+
         ### DATA ASSOCIATION ###
         
         ## TODOS OS CONES
@@ -283,7 +338,7 @@ class EKF(object):
         #perform data association
 
         ## TODOS OS CONES
-        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, all_cones_converted_predicted_pose_colors, 2.2)
+        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, all_cones_converted_predicted_pose_colors, threshold)
         #self.logger.info(f"Step 2 - matched Cones: {matched_all_cones}")
         ## DIVIDIDOS POR COR
 
@@ -400,6 +455,8 @@ class EKF(object):
 
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
+
+        #self.logger.info(f"Covarariance matrix = {self.P}")
 
         final_time = time.time()
         dt = final_time - init_time

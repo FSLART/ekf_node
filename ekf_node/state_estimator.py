@@ -197,35 +197,77 @@ class StateEstimator(Node):
 
     def write_cones_to_csv(self):
         # Collect cone data
-        all_maped_cones = []
-        for i in range(self.ekf.n_landmarks):
-            cone = (self.ekf.state[self.ekf.n_state+2*i,0], self.ekf.state[self.ekf.n_state+2*i+1,0])
-            all_maped_cones.append(cone)
+        # all_maped_cones = []
+        # for i in range(self.ekf.n_landmarks):
+        #     cone = (self.ekf.state[self.ekf.n_state+2*i,0], self.ekf.state[self.ekf.n_state+2*i+1,0])
+        #     all_maped_cones.append(cone)
 
-        # blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
-        # yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
-        # orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
-        # orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
+        blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
+        yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
+        orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
+        orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
 
         # Write to CSV
         with open('cones_coordinates.csv', mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Cone Type', 'X', 'Y'])
-            for cone in all_maped_cones:
-                writer.writerow(['Blue', cone[0], cone[1]])
-            # for cone in blue_cones:
+            # for cone in all_maped_cones:
             #     writer.writerow(['Blue', cone[0], cone[1]])
-            # for cone in yellow_cones:
-            #     writer.writerow(['Yellow', cone[0], cone[1]])
-            # for cone in orange_cones:
-            #     writer.writerow(['Orange', cone[0], cone[1]])
-            # for cone in orange_big_cones:
-            #     writer.writerow(['Orange Big', cone[0], cone[1]])
+            for cone in blue_cones:
+                writer.writerow(['Blue', cone[0], cone[1]])
+            for cone in yellow_cones:
+                writer.writerow(['Yellow', cone[0], cone[1]])
+            for cone in orange_cones:
+                writer.writerow(['Orange', cone[0], cone[1]])
+            for cone in orange_big_cones:
+                writer.writerow(['Orange Big', cone[0], cone[1]])
 
     def destroy_node(self):
         # Write cones to CSV before shutting down
         if self.ekf:
+            self.ekf.post_processing()
             self.write_cones_to_csv()
+        
+            # Get cone positions from the map
+            map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
+            map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
+            map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
+            map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
+
+            # Update cone data
+            if map_blue_cones:
+                bc.set_data([cone[1] for cone in map_blue_cones], [cone[0] for cone in map_blue_cones])
+            if map_yellow_cones:
+                yc.set_data([cone[1] for cone in map_yellow_cones], [cone[0] for cone in map_yellow_cones])
+            if map_orange_cones:
+                oc.set_data([cone[1] for cone in map_orange_cones], [cone[0] for cone in map_orange_cones])
+            if map_orange_big_cones:
+                obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
+
+            # Update cone data
+            # all_maped_cones = []
+            # for i in range(self.ekf.n_landmarks):
+            #     cone = (self.ekf.state[self.ekf.n_state+2*i,0], self.ekf.state[self.ekf.n_state+2*i+1,0])
+            #     all_maped_cones.append(cone)
+
+            # bc.set_data([cone[1] for cone in all_maped_cones], [cone[0] for cone in all_maped_cones])
+
+            # The selected cone position
+            # sx = self.ekf.state[3]
+            # sy = self.ekf.state[4]
+
+            # ssc.set_data(sy, sx)  # Update selected cone position
+
+            # Update trajectory plot
+            sc.set_data(y_vals, x_vals)
+            line.set_data(y_vals, x_vals)
+
+            # Refresh plot
+            ax.relim()
+            ax.autoscale_view()
+            plt.draw()
+            plt.pause(60.0)
+
         super().destroy_node()
 
 
