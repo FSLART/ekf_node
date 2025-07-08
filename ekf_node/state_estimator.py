@@ -174,8 +174,6 @@ class StateEstimator(Node):
         # Intialize ConeArray msg
         cone_array_msg = ConeArray()
 
-        self.get_logger().info("Publishing ConeArray message...")
-
         # Get cone by color
         map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
         for cone in map_yellow_cones:
@@ -208,8 +206,6 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 4 # Orange Big cone
             cone_array_msg.cones.append(cone_aux)
-        
-        self.get_logger().info(f"cone_array_msg = {cone_array_msg.cones}")
 
         # Publish the ConeArray message
         self.map_pub.publish(cone_array_msg)
