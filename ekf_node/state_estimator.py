@@ -85,6 +85,8 @@ class StateEstimator(Node):
         # Create publisher
         position_topic = self.get_parameter('position_topic').get_parameter_value().string_value
         self.pos_pub = self.create_publisher(PoseStamped, position_topic, 10)
+
+        self.last_rpm = 0.0  # Initialize last rpm to zero
         
         
         self.ekf = None
@@ -98,7 +100,14 @@ class StateEstimator(Node):
         if self.ekf is None:
             self.intialize_ekf()
 
-        rpm = v_msg.rpm
+        rpm = 0
+
+        if v_msg.rpm > 2000:
+            rpm = self.last_rpm  # If the rpm is too high, use the last known rpm
+        else:
+            self.last_rpm = rpm
+            rpm = v_msg.rpm
+            
 
         # Convert the rpm's to m/s
         ms_speed = self.tire_perimeter * (rpm / self.transmission_ratio / 60.0)

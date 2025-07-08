@@ -74,13 +74,14 @@ class EKF(object):
     #             for d, i in zip(dists[:, 0], idx[:, 0])]
     #     return idx_map
     
-    def data_association(self, cones, observations, threshold):
+    def data_association(self, cones, observations, obs_colors, threshold):
         '''
         Perform data association between cones and observations.
         
         Args:
             cones (list): List of cone positions (2D coordinates).
             observations (list): List of observed positions (2D coordinates).
+            obs_colors (list): List of colors corresponding to each observation.
             threshold (float): Max distance for association.
         
         Returns:
@@ -91,12 +92,34 @@ class EKF(object):
             return [-1] * len(observations)
         
         matched_cones = []
-        tree = KDTree(cones)
 
-        for obs in observations:
+        for idx, obs in enumerate(observations):
+            # Get only the cones of the corresponding color
+            color = obs_colors[idx]
+
+            available_cones = []
+            if color == 1:  # Yellow
+                available_cones = self.yellow_cones_indices
+            elif color == 2:  # Blue
+                available_cones = self.blue_cones_indices
+            elif color == 3:  # Orange
+                available_cones = self.orange_cones_indices
+            elif color == 4:  # Orange Big
+                available_cones = self.orange_big_cones_indices
+
+            self.logger.info(f"yellow_cones_indices: {self.yellow_cones_indices}, blue_cones_indices: {self.blue_cones_indices}, orange_cones_indices: {self.orange_cones_indices}, orange_big_cones_indices: {self.orange_big_cones_indices}")
+
+            if len(available_cones) == 0:
+                matched_cones.append(-1)
+                continue
+
+            tree = KDTree(cones)
             indices = tree.query_radius([obs], r=threshold)[0]
             if len(indices) > 0:
-                matched_cones.append(indices[0]) 
+                for idx in indices:
+                    if idx in available_cones:
+                        matched_cones.append(idx)
+                        break
             else:
                 matched_cones.append(-1)
             
@@ -152,7 +175,7 @@ class EKF(object):
                 [bottom_left,   landmark_cov]
             ])
 
-            # Save this landmark's
+            # Save the landmarks
             if new_cones_color[i] == 1:  # Yellow
                 self.yellow_cones_indices.append(self.n_landmarks)
             elif new_cones_color[i] == 2:  # Blue
@@ -260,8 +283,8 @@ class EKF(object):
         #perform data association
 
         ## TODOS OS CONES
-        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, 2.2)
-        self.logger.info(f"Step 2 - matched Cones: {matched_all_cones}")
+        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, all_cones_converted_predicted_pose_colors, 2.2)
+        #self.logger.info(f"Step 2 - matched Cones: {matched_all_cones}")
         ## DIVIDIDOS POR COR
 
         # matched_yellow_cones = self.data_association(map_yellow_cones, yellow_cones_converted_predicted_pose_keys, 2.0)
@@ -272,9 +295,9 @@ class EKF(object):
         ## TODOS OS CONES
         all_new_cones = []
         all_new_cones_color = []
-        for i, cords in enumerate(all_cones_converted_predicted_pose_keys):
+        for i in range(len(matched_all_cones)):
             if matched_all_cones[i] == -1:
-                all_new_cones.append(tuple(cords))
+                all_new_cones.append(tuple(all_cones_converted_predicted_pose_keys[i]))
                 all_new_cones_color.append(all_cones_converted_predicted_pose_colors[i])
             # else:
             #     self.logger.info(f"Matched cone at {tuple(cords)} with index {matched_all_cones[i]}")
