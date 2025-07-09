@@ -5,6 +5,7 @@ import numpy as np
 from .ekf import EKF
 from lart_msgs.msg import GNSSINS, Dynamics, ConeArray, Cone
 from visualization_msgs.msg import MarkerArray, Marker
+from std_msgs.msg import UInt16
 import csv
 
 from geometry_msgs.msg import Vector3Stamped, PoseStamped
@@ -61,6 +62,7 @@ class StateEstimator(Node):
         self.declare_parameter('cones_topic','/mapping/cones')
         self.declare_parameter('position_topic','/ekf/state')
         self.declare_parameter('map_topic','/ekf/map')
+        self.declare_parameter('lap_topic','/lap_count')
         self.declare_parameter('markers_topic','/ekf/cone_markers')
 
         ### SUBSCRIPTIONS ###
@@ -76,6 +78,10 @@ class StateEstimator(Node):
         # Sub for Observations
         cones_topic = self.get_parameter('cones_topic').get_parameter_value().string_value
         self.cones_sub = self.create_subscription(ConeArray, cones_topic, self.update_callback, 10)
+
+        # Sub for Lap Count
+        lap_topic = self.get_parameter('lap_topic').get_parameter_value().string_value
+        self.lap_sub = self.create_subscription(UInt16, lap_topic, self.lap_callback, 10) #TODO match the type of message
 
         ### PUBLISHER ###
 
@@ -97,6 +103,16 @@ class StateEstimator(Node):
         self.ekf = None
 
         self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
+
+    def lap_callback(self, msg):
+        if self.ekf is None:
+            return
+        
+        self.ekf.lap_count = msg.data
+
+        ### Post Processing ###
+        if self.ekf.lap_count == 1:
+            self.ekf.post_processing()  # Process the cones after the first lap
 
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
@@ -303,15 +319,16 @@ class StateEstimator(Node):
         # Write to CSV
         with open('cones_coordinates.csv', mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Cone Type', 'X', 'Y'])
-            for cone in blue_cones:
-                writer.writerow(['Blue', cone[0], cone[1]])
+            writer.writerow(['Cone Type', 'X', 'Y', 'covariance'])
+            for i,cone in enumerate(blue_cones):
+                writer.writerow(['Blue', cone[0], cone[1], cone[2]]) 
             for cone in yellow_cones:
-                writer.writerow(['Yellow', cone[0], cone[1]])
+                writer.writerow(['Yellow', cone[0], cone[1], cone[2]])
             for cone in orange_cones:
-                writer.writerow(['Orange', cone[0], cone[1]])
+                writer.writerow(['Orange', cone[0], cone[1], cone[2]])
             for cone in orange_big_cones:
-                writer.writerow(['Orange Big', cone[0], cone[1]])
+                writer.writerow(['Orange Big', cone[0], cone[1], cone[2]])
+            
 
     def destroy_node(self):
         # Write cones to CSV before shutting down

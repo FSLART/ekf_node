@@ -24,6 +24,9 @@ class EKF(object):
         self.orange_big_cones_indices = []
         self.n_landmarks = 0
 
+        # Laps
+        self.lap_count = 0
+
         # Ensure initial_state is float to avoid dtype issues
         self.state = initial_state.astype(np.float64)  # [x, y, theta]
         self.P = np.zeros((self.n_state+2*self.n_landmarks,self.n_state+2*self.n_landmarks)) # Covariance matrix
@@ -38,7 +41,9 @@ class EKF(object):
         '''
         cones = []
         for i in color:
-            cone = (state_array[self.n_state+2*i,0], state_array[self.n_state+2*i+1,0])
+            cov = self.P[self.n_state+2*i:self.n_state+2*i+2, self.n_state+2*i:self.n_state+2*i+2]
+            covariance = np.trace(cov) 
+            cone = (state_array[self.n_state+2*i,0], state_array[self.n_state+2*i+1,0], covariance)
             cones.append(cone)
         return cones
     
@@ -282,9 +287,14 @@ class EKF(object):
             state_offset += Ks[lidx].dot(delta_zs[lidx]) # Compute full mu offset
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
 
+        # Prevent changes in landmark's positions if the map has already been fully created
+        if self.lap_count >= 1:
+            state_offset[self.n_state:] = 0  # freeze landmark means
+
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
 
         ### ADD NEW CONES ###
-        self.data_augmentation(all_new_cones, all_new_cones_color)
+        if self.lap_count < 1:
+            self.data_augmentation(all_new_cones, all_new_cones_color)
 
