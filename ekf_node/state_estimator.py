@@ -1,10 +1,10 @@
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
 import numpy as np
-import math
 from .ekf import EKF
 from lart_msgs.msg import GNSSINS, Dynamics, ConeArray, Cone
-from message_filters import Subscriber, ApproximateTimeSynchronizer
+from visualization_msgs.msg import MarkerArray, Marker
 import csv
 
 from geometry_msgs.msg import Vector3Stamped, PoseStamped
@@ -34,8 +34,6 @@ ax.axis('equal')
 x_vals = []
 y_vals = []
 
-
-
 class StateEstimator(Node):
 
     def __init__(self):
@@ -53,6 +51,8 @@ class StateEstimator(Node):
         self.angular_velocity = 0.0  # Initialize motor speed variable
         self.last_rpm = 0.0 # Initialize a safety measure for the speed
 
+        self.count_marker = 0
+
 
         ### DECLARING PARAMETERS ###
 
@@ -61,6 +61,7 @@ class StateEstimator(Node):
         self.declare_parameter('cones_topic','/mapping/cones')
         self.declare_parameter('position_topic','/ekf/state')
         self.declare_parameter('map_topic','/ekf/map')
+        self.declare_parameter('markers_topic','/ekf/cone_markers')
 
         ### SUBSCRIPTIONS ###
 
@@ -86,10 +87,16 @@ class StateEstimator(Node):
         map_topic = self.get_parameter('map_topic').get_parameter_value().string_value
         self.map_pub = self.create_publisher(ConeArray, map_topic, 10)
 
+        # Cone markers publisher
+        markers_topic = self.get_parameter('markers_topic').get_parameter_value().string_value
+        self.markers_pub = self.create_publisher(MarkerArray, markers_topic, 10)
+
         self.last_rpm = 0.0  # Initialize last rpm to zero
         
         
         self.ekf = None
+
+        self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
 
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
@@ -159,7 +166,6 @@ class StateEstimator(Node):
 
         # publish the new state
         self.position_publish()
-        self.map_publish()
         
 
     def position_publish(self):
@@ -171,8 +177,13 @@ class StateEstimator(Node):
         self.pos_pub.publish(msg)
     
     def map_publish(self):
+        if self.ekf is None:
+            return
+        
         # Intialize ConeArray msg
         cone_array_msg = ConeArray()
+
+        marker_array_msg = MarkerArray()
 
         # Get cone by color
         map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
@@ -182,6 +193,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 1 # Yellow cone
             cone_array_msg.cones.append(cone_aux)
+            
+            marker = self.create_marker(cone, 1) 
+            marker_array_msg.markers.append(marker)
+
 
         map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
         for cone in map_blue_cones:
@@ -190,6 +205,9 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 2 # Blue cone
             cone_array_msg.cones.append(cone_aux)
+
+            marker = self.create_marker(cone, 2)  # Create marker for blue cone
+            marker_array_msg.markers.append(marker)
         
         map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
         for cone in map_orange_cones:
@@ -199,6 +217,9 @@ class StateEstimator(Node):
             cone_aux.class_type.data = 3 # Orange cone
             cone_array_msg.cones.append(cone_aux)
 
+            marker = self.create_marker(cone, 3) 
+            marker_array_msg.markers.append(marker)
+
         map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
         for cone in map_orange_big_cones:
             cone_aux = Cone()
@@ -207,9 +228,62 @@ class StateEstimator(Node):
             cone_aux.class_type.data = 4 # Orange Big cone
             cone_array_msg.cones.append(cone_aux)
 
+            marker = self.create_marker(cone, 4) 
+            marker_array_msg.markers.append(marker)
+
         # Publish the ConeArray message
         self.map_pub.publish(cone_array_msg)
 
+        # Publish the MarkerArray message
+        self.markers_pub.publish(marker_array_msg)
+
+    def create_marker(self, cone, cone_type):
+        marker = Marker()
+        marker.header.frame_id = 'base_footprint'
+        marker.id = self.count_marker
+        self.count_marker += 1
+        marker.type = Marker.CYLINDER
+        marker.action = Marker.ADD
+        marker.lifetime = Duration(seconds=0.1).to_msg()
+        marker.pose.position.x = cone[0]
+        marker.pose.position.y = cone[1]
+        marker.pose.position.z = 0.0
+
+        if cone_type == 1:
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.25
+        elif cone_type == 2:
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.25
+        elif cone_type == 3:
+            marker.color.r = 1.0
+            marker.color.g = 0.5
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.25
+        elif cone_type == 4:
+            marker.color.r = 1.0
+            marker.color.g = 0.5
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.50
+
+        return marker
+            
 
 
     def intialize_ekf(self):
