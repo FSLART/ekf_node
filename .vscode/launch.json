@@ -9,7 +9,7 @@
             "request": "launch",
             "target": "/home/andre-lopes/Desktop/ros2_ws/src/ekf_node/launch/launch_ekf.py",
             "launch": ["rviz", "gz", "gzserver", "gzclient"],
-            "type": "ros"
+            "type": "ros2"
         }
     ]
 }

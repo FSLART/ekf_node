@@ -60,7 +60,7 @@ class StateEstimator(Node):
         self.declare_parameter('imu_topic','/imu/angular_velocity')
         self.declare_parameter('cones_topic','/mapping/cones')
         self.declare_parameter('position_topic','/ekf/state')
-        self.declare_parameter('map_topic','/ekf_slam/map')
+        self.declare_parameter('map_topic','/ekf/map')
 
         ### SUBSCRIPTIONS ###
 
