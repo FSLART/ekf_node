@@ -3,7 +3,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 import numpy as np
 from .ekf import EKF
-from lart_msgs.msg import GNSSINS, Dynamics, ConeArray, Cone
+from lart_msgs.msg import Dynamics, ConeArray, Cone, SlamStats
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import UInt16
 import csv
@@ -64,6 +64,7 @@ class StateEstimator(Node):
         self.declare_parameter('map_topic','/ekf/map')
         self.declare_parameter('lap_topic','/lap_count')
         self.declare_parameter('markers_topic','/ekf/cone_markers')
+        self.declare_parameter('stats_topic', '/ekf/stats')
 
         ### SUBSCRIPTIONS ###
 
@@ -97,12 +98,18 @@ class StateEstimator(Node):
         markers_topic = self.get_parameter('markers_topic').get_parameter_value().string_value
         self.markers_pub = self.create_publisher(MarkerArray, markers_topic, 10)
 
+        # Slam stats publisher
+        stats_topic = self.get_parameter('stats_topic').get_parameter_value().string_value
+        self.slam_stats_pub = self.create_publisher(SlamStats, stats_topic, 10)
+
+
         self.last_rpm = 0.0  # Initialize last rpm to zero
         
         
         self.ekf = None
 
         self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
+        self.slam_stats_timer = self.create_timer(0.02, self.publish_slam_stats)  # Timer to publish slam stats at 50Hz
 
     def lap_callback(self, msg):
         if self.ekf is None:
@@ -140,6 +147,7 @@ class StateEstimator(Node):
         # Call the predict method of the EKF
         self.ekf.predict(ms_speed, omega_z)
 
+        
         # Update trajectory
         x_vals.append(float(self.ekf.state[0]))
         y_vals.append(float(self.ekf.state[1]))
@@ -169,6 +177,7 @@ class StateEstimator(Node):
         ax.autoscale_view()
         plt.draw()
         plt.pause(0.001)
+        
 
         # Publish the new state
         self.position_publish()
@@ -208,9 +217,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 1 # Yellow cone
             cone_array_msg.cones.append(cone_aux)
-            
+            '''
             marker = self.create_marker(cone, 1) 
             marker_array_msg.markers.append(marker)
+            '''
 
 
         map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
@@ -220,9 +230,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 2 # Blue cone
             cone_array_msg.cones.append(cone_aux)
-
+            '''
             marker = self.create_marker(cone, 2)  # Create marker for blue cone
             marker_array_msg.markers.append(marker)
+            '''
         
         map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
         for cone in map_orange_cones:
@@ -231,9 +242,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 3 # Orange cone
             cone_array_msg.cones.append(cone_aux)
-
+            '''
             marker = self.create_marker(cone, 3) 
             marker_array_msg.markers.append(marker)
+            '''
 
         map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
         for cone in map_orange_big_cones:
@@ -242,15 +254,30 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 4 # Orange Big cone
             cone_array_msg.cones.append(cone_aux)
-
+            '''
             marker = self.create_marker(cone, 4) 
             marker_array_msg.markers.append(marker)
+            '''
 
         # Publish the ConeArray message
         self.map_pub.publish(cone_array_msg)
-
+        '''
         # Publish the MarkerArray message
         self.markers_pub.publish(marker_array_msg)
+        '''
+
+    def publish_slam_stats(self):
+        if self.ekf is None:
+            return
+        #Create a new SlamStats message
+        slam_stats_msg = SlamStats()
+        slam_stats_msg.lap_count = self.ekf.lap_count
+        slam_stats_msg.cones_count_all = self.ekf.n_landmarks
+        slam_stats_msg.cones_count_current = self.ekf.current_n_observations
+
+        self.slam_stats_pub.publish(slam_stats_msg)
+
+
 
     def create_marker(self, cone, cone_type):
         marker = Marker()
@@ -305,7 +332,6 @@ class StateEstimator(Node):
         # Initialize the EKF with the initial state and covariance
         initial_state = np.array([[0.0], [0.0], [0.0]])  # Float dtype #-15 PARA SKIDPAD
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
-        wheelbase = 1.55
         self.ekf = EKF(initial_state, process_noise)
 
     def write_cones_to_csv(self):
@@ -334,7 +360,7 @@ class StateEstimator(Node):
         if self.ekf:
             self.ekf.post_processing()
             self.write_cones_to_csv()
-        
+
             # Get cone positions from the map
             map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
             map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)

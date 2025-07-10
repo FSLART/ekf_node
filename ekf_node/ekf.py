@@ -22,6 +22,7 @@ class EKF(object):
         self.orange_cones_indices = []
         self.orange_big_cones_indices = []
         self.n_landmarks = 0
+        self.current_n_observations = 0
 
         # Laps
         self.lap_count = 0
@@ -34,7 +35,7 @@ class EKF(object):
         self.P = np.zeros((self.n_state+2*self.n_landmarks,self.n_state+2*self.n_landmarks)) # Covariance matrix
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
-        self.Q = np.diag([0.003,0.003]) # sigma_r, sigma_phi
+        self.Q = np.diag([0.1,0.1]) # cone_x and cone_y -> 0.003
 
     def get_cones_from_map(self, state_array, color):
         '''
@@ -74,12 +75,16 @@ class EKF(object):
 
             available_cones = []
             if color == 1:  # Yellow
+                aux_threshold = threshold
                 available_cones = self.yellow_cones_indices
             elif color == 2:  # Blue
+                aux_threshold = threshold
                 available_cones = self.blue_cones_indices
             elif color == 3:  # Orange
+                aux_threshold = threshold
                 available_cones = self.orange_cones_indices
             elif color == 4:  # Orange Big
+                aux_threshold = threshold * 0.4
                 available_cones = self.orange_big_cones_indices
 
             if len(available_cones) == 0:
@@ -87,7 +92,7 @@ class EKF(object):
                 continue
 
             tree = KDTree(cones)
-            indices = tree.query_radius([obs], r=threshold)[0]
+            indices = tree.query_radius([obs], r=aux_threshold)[0]
             if len(indices) > 0:
                 for idx in indices:
                     if idx in available_cones:
@@ -156,7 +161,7 @@ class EKF(object):
                     to_remove.add(j)
 
         # Remove outliers with high covariance
-        max_cov = 2.0  # Example threshold
+        max_cov = 0.2  # Example threshold
         for i in range(self.n_landmarks):
             cov = self.P[self.n_state+2*i:self.n_state+2*i+2, self.n_state+2*i:self.n_state+2*i+2]
             if np.trace(cov) > max_cov:
@@ -209,9 +214,12 @@ class EKF(object):
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
     def update(self,z):
-
+        init_time = time.time()  # Start time for measurement update
         ### DATA ASSOCIATION ###
         
+        # Save the current number of observations
+        self.current_n_observations = len(z.cones)
+
         all_mapped_cones = []
         for i in range(self.n_landmarks):
             cone = (self.state[self.n_state+2*i,0], self.state[self.n_state+2*i+1,0])
@@ -291,6 +299,10 @@ class EKF(object):
 
         self.state = self.state + state_offset # Update state estimate
         self.P = covariance_factor.dot(self.P) # Update state uncertainty
+
+        final_time = time.time()
+        dt = final_time - init_time
+        self.logger.info(f"Measurement update took {dt:.4f}")
 
         ### ADD NEW CONES ###
         if self.lap_count < 1:
