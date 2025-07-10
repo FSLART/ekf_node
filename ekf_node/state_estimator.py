@@ -174,7 +174,6 @@ class StateEstimator(Node):
         self.position_publish()
 
     def update_callback(self, obs_msg):
-        
         if(self.ekf is None):
             self.intialize_ekf()
         

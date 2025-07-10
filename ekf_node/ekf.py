@@ -6,7 +6,6 @@ from math import sqrt
 
 class EKF(object):
     def __init__(self, initial_state, noise):
-        #self.wheelbase = wheelbase
 
         self.logger = rclpy.logging.get_logger('ekf_logger')  # Create a logger instance
         
@@ -26,6 +25,9 @@ class EKF(object):
 
         # Laps
         self.lap_count = 0
+
+        # Thresholds
+        self.threshold = 2.2  # Distance threshold for data association and post-processing
 
         # Ensure initial_state is float to avoid dtype issues
         self.state = initial_state.astype(np.float64)  # [x, y, theta]
@@ -127,7 +129,6 @@ class EKF(object):
 
     def post_processing(self):
         # Find duplicate cones
-        threshold = 2.2
         to_remove = set()
         for i in range(self.n_landmarks):
             if i in to_remove:
@@ -151,7 +152,7 @@ class EKF(object):
                     continue
                 xj = self.state[self.n_state+2*j, 0]
                 yj = self.state[self.n_state+2*j+1, 0]
-                if np.hypot(xi-xj, yi-yj) < threshold:
+                if np.hypot(xi-xj, yi-yj) < self.threshold:
                     to_remove.add(j)
 
         # Remove outliers with high covariance
@@ -208,9 +209,6 @@ class EKF(object):
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
     def update(self,z):
-        ### PARAMETERS ###
-
-        threshold = 2.2
 
         ### DATA ASSOCIATION ###
         
@@ -239,7 +237,7 @@ class EKF(object):
         all_cones_converted_predicted_pose_colors = np.array(list(all_cones_converted_predicted_pose.values()))
 
         #perform data association
-        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, all_cones_converted_predicted_pose_colors, threshold)
+        matched_all_cones = self.data_association(all_mapped_cones, all_cones_converted_predicted_pose_keys, all_cones_converted_predicted_pose_colors, self.threshold)
         
         all_new_cones = []
         all_new_cones_color = []
