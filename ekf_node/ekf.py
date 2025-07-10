@@ -15,6 +15,7 @@ class EKF(object):
         # auxiliary variables
         self.n_state = 3
         self.Fx = np.eye(3)
+        self.distance = 0.0
 
         #Landmarks
         self.blue_cones_indices = []
@@ -23,9 +24,6 @@ class EKF(object):
         self.orange_big_cones_indices = []
         self.n_landmarks = 0
         self.current_n_observations = 0
-
-        # Laps
-        self.lap_count = 0
 
         # Thresholds
         self.threshold = 2.2  # Distance threshold for data association and post-processing
@@ -36,6 +34,7 @@ class EKF(object):
         np.fill_diagonal(self.P,100) # Initialize state uncertainty with large variances, no correlations
         self.R = noise.astype(np.float64)  # Process noise
         self.Q = np.diag([0.1,0.1]) # cone_x and cone_y -> 0.003
+
 
     def get_cones_from_map(self, state_array, color):
         '''
@@ -50,6 +49,7 @@ class EKF(object):
             cones.append(cone)
         return cones
     
+
     def data_association(self, cones, observations, obs_colors, threshold):
         '''
         Perform data association between cones and observations.
@@ -103,6 +103,7 @@ class EKF(object):
             
         return matched_cones
 
+
     def data_augmentation(self, new_cones, new_cones_color):
         for i, cone_coords in enumerate(new_cones):
             landmark_x, landmark_y = cone_coords
@@ -131,6 +132,7 @@ class EKF(object):
 
             self.n_landmarks += 1
             self.Fx = np.block([[self.Fx, np.zeros((self.n_state, 2))],])
+
 
     def post_processing(self):
         # Find duplicate cones
@@ -178,10 +180,11 @@ class EKF(object):
             elif idx in self.orange_cones_indices:
                 self.orange_cones_indices.remove(idx)
             elif idx in self.orange_big_cones_indices:
-                self.orange_big_cones_indices.remove(idx)
+                self.orange_big_cones_indices.remove(idx)   
+    
+    def calculate_distance(self, v, dt):
+        self.distance += v*dt
 
-        
-        
         
     def predict(self, v, w):
 
@@ -190,6 +193,9 @@ class EKF(object):
         dt = current_time - self.last_time
         self.last_time = current_time
         
+        #calculate distance for the lap counter
+        self.calculate_distance(v, dt)
+
         # Getting the state
         theta = self.state[2, 0]  # Robot heading
         
@@ -213,7 +219,8 @@ class EKF(object):
 
         self.P = G.dot(self.P).dot(np.transpose(G)) + np.transpose(self.Fx).dot(self.R).dot(self.Fx) # Combine model effects and stochastic noise    
 
-    def update(self,z):
+
+    def update(self,z, lap):
         init_time = time.time()  # Start time for measurement update
         ### DATA ASSOCIATION ###
         
@@ -294,7 +301,7 @@ class EKF(object):
             covariance_factor -= Ks[lidx].dot(Hs[lidx]) # Compute full sigma factor
 
         # Prevent changes in landmark's positions if the map has already been fully created
-        if self.lap_count >= 1:
+        if lap >= 1:
             state_offset[self.n_state:] = 0  # freeze landmark means
 
         self.state = self.state + state_offset # Update state estimate
@@ -305,6 +312,6 @@ class EKF(object):
         self.logger.info(f"Measurement update took {dt:.4f}")
 
         ### ADD NEW CONES ###
-        if self.lap_count < 1:
+        if lap < 1:
             self.data_augmentation(all_new_cones, all_new_cones_color)
 

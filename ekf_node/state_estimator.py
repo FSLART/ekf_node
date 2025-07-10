@@ -3,7 +3,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 import numpy as np
 from .ekf import EKF
-from lart_msgs.msg import Dynamics, ConeArray, Cone, SlamStats
+from lart_msgs.msg import Dynamics, ConeArray, Cone, SlamStats, Mission
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import UInt16
 import csv
@@ -47,12 +47,20 @@ class StateEstimator(Node):
         self.tire_perimeter = 2.0 * lart_pi * tire_radius 
         self.transmission_ratio = 4.0  
         self.previous_yaw = 0.0
+        self.min_lap_dist = 15.0
+
+        ### LAP COUNTER VARIABLES ###
+        self.lap_count = -1 # Laps
+
+        self.margin_x = 1.0
+        self.margin_y = 3.0
 
         ### MOTOR SPEED VARIABLE ###
         self.angular_velocity = 0.0  # Initialize motor speed variable
         self.last_rpm = 0.0 # Initialize a safety measure for the speed
 
-        self.count_marker = 0
+        ### MISSION VARIABLES ###
+        self.mission = Mission.MANUAL #Consider Manual a the default mission
 
 
         ### DECLARING PARAMETERS ###
@@ -62,15 +70,15 @@ class StateEstimator(Node):
         self.declare_parameter('cones_topic','/mapping/cones')
         self.declare_parameter('position_topic','/ekf/state')
         self.declare_parameter('map_topic','/ekf/map')
-        self.declare_parameter('lap_topic','/lap_count')
         self.declare_parameter('markers_topic','/ekf/cone_markers')
         self.declare_parameter('stats_topic', '/ekf/stats')
+        self.declare_parameter('mission_topic','/pc_origin/system_status/critical_as/mission')
 
         ### SUBSCRIPTIONS ###
 
         # Sub for Motor Speed
-        dynamics_sub = self.get_parameter('dynamics_topic').get_parameter_value().string_value
-        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_sub, self.predict_callback, 10)
+        dynamics_topic = self.get_parameter('dynamics_topic').get_parameter_value().string_value
+        self.dynamics_sub = self.create_subscription(Dynamics, dynamics_topic, self.predict_callback, 10)
 
         # Sub for Imu (angular velocity)
         imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
@@ -80,9 +88,10 @@ class StateEstimator(Node):
         cones_topic = self.get_parameter('cones_topic').get_parameter_value().string_value
         self.cones_sub = self.create_subscription(ConeArray, cones_topic, self.update_callback, 10)
 
-        # Sub for Lap Count
-        lap_topic = self.get_parameter('lap_topic').get_parameter_value().string_value
-        self.lap_sub = self.create_subscription(UInt16, lap_topic, self.lap_callback, 10) #TODO match the type of message
+        # Sub for mission
+        mission_topic = self.get_parameter('mission_topic').get_parameter_value().string_value
+        self.mission_sub = self.get_parameter(Mission,mission_topic, self.mission_callback, 10)
+
 
         ### PUBLISHER ###
 
@@ -102,20 +111,25 @@ class StateEstimator(Node):
         stats_topic = self.get_parameter('stats_topic').get_parameter_value().string_value
         self.slam_stats_pub = self.create_publisher(SlamStats, stats_topic, 10)
 
-
-        self.last_rpm = 0.0  # Initialize last rpm to zero
         
+        ### AUX VARIABLES ###
+        self.last_rpm = 0.0  # Initialize last rpm to zero
+        self.count_marker = 0
         
         self.ekf = None
 
         self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
         self.slam_stats_timer = self.create_timer(0.02, self.publish_slam_stats)  # Timer to publish slam stats at 50Hz
 
+    def mission_callback(self, msg):
+        self.mission = msg.data
+
+
     def lap_callback(self, msg):
         if self.ekf is None:
             return
         
-        self.ekf.lap_count = msg.data
+        self.lap_count = msg.data
 
         ### Post Processing ###
         if self.ekf.lap_count == 1:
@@ -129,6 +143,7 @@ class StateEstimator(Node):
     def predict_callback(self, v_msg):
         if self.ekf is None:
             self.intialize_ekf()
+            return
 
         rpm = 0
 
@@ -182,14 +197,21 @@ class StateEstimator(Node):
         # Publish the new state
         self.position_publish()
 
+        # Verify if a lap was completed
+        self.verify_lap()
+
     def update_callback(self, obs_msg):
-        if(self.ekf is None):
+        if self.ekf is None:
             self.intialize_ekf()
+            return
         
         self.ekf.update(obs_msg)
 
         # publish the new state
         self.position_publish()
+
+        # Verify if a lap was completed
+        self.verify_lap()
         
 
     def position_publish(self):
@@ -271,12 +293,55 @@ class StateEstimator(Node):
             return
         #Create a new SlamStats message
         slam_stats_msg = SlamStats()
-        slam_stats_msg.lap_count = self.ekf.lap_count
+        slam_stats_msg.lap_count = self.lap_count
         slam_stats_msg.cones_count_all = self.ekf.n_landmarks
         slam_stats_msg.cones_count_current = self.ekf.current_n_observations
 
         self.slam_stats_pub.publish(slam_stats_msg)
 
+
+
+    def verify_lap(self):
+
+        position_x = self.ekf.state[0,0]
+        position_y = self.ekf.state[1,0]
+
+        if self.lap_count == -1:
+            if self.mission == Mission.SKIDPAD:
+                if np.abs(position_x - 15.0) < self.margin_x:
+                    #Only start counting in the midle of the skidpad
+                    self.lap_count = 0
+                    distance_after_lap = self.ekf.distance
+                    return
+                else:
+                    #Initialize other missions with lap 0
+                    self.lap_count = 0
+                    distance_after_lap = self.ekf.distance
+
+        # Prevent lap from incrementing multiple times in the same real lap
+        dt_dist = self.ekf.distance - distance_after_lap #TODO: CHECK THIS
+        if dt_dist < self.min_lap_dist:
+            return
+
+        lap_complete = False
+
+        #Aceleration Lap
+        if self.mission == Mission.ACCELERATION:
+            if np.abs(position_x - 75.0) < self.margin_x:
+                lap_complete = True
+        #SkidPad lap
+        if self.mission == Mission.SKIDPAD:
+            if (np.abs(position_x - 15) < self.margin_x) and (np.abs(position_y) < self.margin_y):
+                lap_complete = True
+        #TrackDrive and Autocross lap
+        if self.mission == Mission.AUTOCROSS or self.mission == Mission.TRACKDRIVE:
+            if np.abs(position_x) < self.margin_x and np.abs(position_y) < self.margin_y:
+                lap_complete = True
+        
+        #Increment Lap
+        if lap_complete:
+            self.lap_count += 1      
+            distance_after_lap = self.ekf.distance
 
 
     def create_marker(self, cone, cone_type):
@@ -330,9 +395,15 @@ class StateEstimator(Node):
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
-        initial_state = np.array([[0.0], [0.0], [0.0]])  # Float dtype #-15 PARA SKIDPAD
+        if self.mission == Mission.MANUAL:
+            return
+        elif self.mission == Mission.TRACKDRIVE or self.mission == Mission.AUTOCROSS:
+            initial_state = np.array([[-6.0], [0.0], [0.0]])
+        else:
+            initial_state = np.array([[0.0], [0.0], [0.0]])
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
         self.ekf = EKF(initial_state, process_noise)
+
 
     def write_cones_to_csv(self):
         # Collect cone data
