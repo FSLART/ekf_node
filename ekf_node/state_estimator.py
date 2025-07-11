@@ -60,7 +60,8 @@ class StateEstimator(Node):
         self.last_rpm = 0.0 # Initialize a safety measure for the speed
 
         ### MISSION VARIABLES ###
-        self.mission = Mission.MANUAL #Consider Manual a the default mission
+        #self.mission = Mission.MANUAL #Consider Manual a the default mission
+        self.mission = Mission.TRACKDRIVE #FOR TESTING
 
 
         ### DECLARING PARAMETERS ###
@@ -90,7 +91,7 @@ class StateEstimator(Node):
 
         # Sub for mission
         mission_topic = self.get_parameter('mission_topic').get_parameter_value().string_value
-        self.mission_sub = self.get_parameter(Mission,mission_topic, self.mission_callback, 10)
+        self.mission_sub = self.create_subscription(Mission, mission_topic, self.mission_callback, 10)
 
 
         ### PUBLISHER ###
@@ -143,6 +144,7 @@ class StateEstimator(Node):
     def predict_callback(self, v_msg):
         if self.ekf is None:
             self.intialize_ekf()
+            self.get_logger.info('Iniciei ekf no predict')
             return
 
         rpm = 0
@@ -203,9 +205,10 @@ class StateEstimator(Node):
     def update_callback(self, obs_msg):
         if self.ekf is None:
             self.intialize_ekf()
+            self.get_logger.info('Iniciei ekf no update')
             return
         
-        self.ekf.update(obs_msg)
+        self.ekf.update(obs_msg, self.lap_count)
 
         # publish the new state
         self.position_publish()
@@ -390,8 +393,6 @@ class StateEstimator(Node):
             marker.scale.z = 0.50
 
         return marker
-            
-
 
     def intialize_ekf(self):
         # Initialize the EKF with the initial state and covariance
