@@ -54,6 +54,7 @@ class StateEstimator(Node):
 
         self.margin_x = 1.0
         self.margin_y = 3.0
+        self.distance_after_lap = 0.0
 
         ### MOTOR SPEED VARIABLE ###
         self.angular_velocity = 0.0  # Initialize motor speed variable
@@ -126,16 +127,6 @@ class StateEstimator(Node):
         self.mission = msg.data
 
 
-    def lap_callback(self, msg):
-        if self.ekf is None:
-            return
-        
-        self.lap_count = msg.data
-
-        ### Post Processing ###
-        if self.ekf.lap_count == 1:
-            self.ekf.post_processing()  # Process the cones after the first lap
-
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
         self.angular_velocity = imu_msg.vector.z 
@@ -144,7 +135,6 @@ class StateEstimator(Node):
     def predict_callback(self, v_msg):
         if self.ekf is None:
             self.intialize_ekf()
-            self.get_logger.info('Iniciei ekf no predict')
             return
 
         rpm = 0
@@ -205,14 +195,11 @@ class StateEstimator(Node):
     def update_callback(self, obs_msg):
         if self.ekf is None:
             self.intialize_ekf()
-            self.get_logger.info('Iniciei ekf no update')
+            self.get_logger().info('Iniciei ekf no update')
             return
-        
         self.ekf.update(obs_msg, self.lap_count)
-
         # publish the new state
         self.position_publish()
-
         # Verify if a lap was completed
         self.verify_lap()
         
@@ -314,15 +301,15 @@ class StateEstimator(Node):
                 if np.abs(position_x - 15.0) < self.margin_x:
                     #Only start counting in the midle of the skidpad
                     self.lap_count = 0
-                    distance_after_lap = self.ekf.distance
+                    self.distance_after_lap = self.ekf.distance
                     return
-                else:
-                    #Initialize other missions with lap 0
-                    self.lap_count = 0
-                    distance_after_lap = self.ekf.distance
+            else:
+                #Initialize other missions with lap 0
+                self.lap_count = 0
+                self.distance_after_lap = self.ekf.distance
 
         # Prevent lap from incrementing multiple times in the same real lap
-        dt_dist = self.ekf.distance - distance_after_lap #TODO: CHECK THIS
+        dt_dist = self.ekf.distance - self.distance_after_lap #TODO: CHECK THIS
         if dt_dist < self.min_lap_dist:
             return
 
@@ -344,7 +331,14 @@ class StateEstimator(Node):
         #Increment Lap
         if lap_complete:
             self.lap_count += 1      
-            distance_after_lap = self.ekf.distance
+            self.distance_after_lap = self.ekf.distance
+
+            ### Post Processing ###
+            if self.lap_count == 1:
+                self.ekf.post_processing()
+                
+            self.get_logger().info(f'lap={self.lap_count} new distance={self.distance_after_lap}')
+
 
 
     def create_marker(self, cone, cone_type):

@@ -84,7 +84,7 @@ class EKF(object):
                 aux_threshold = threshold
                 available_cones = self.orange_cones_indices
             elif color == 4:  # Orange Big
-                aux_threshold = threshold * 0.4
+                aux_threshold = threshold * 0.5
                 available_cones = self.orange_big_cones_indices
 
             if len(available_cones) == 0:
@@ -164,7 +164,7 @@ class EKF(object):
                     to_remove.add(j)
 
         # Remove outliers with high covariance
-        max_cov = 0.2  # Example threshold
+        max_cov = 0.5  # Example threshold
         for i in range(self.n_landmarks):
             cov = self.P[self.n_state+2*i:self.n_state+2*i+2, self.n_state+2*i:self.n_state+2*i+2]
             if np.trace(cov) > max_cov:
@@ -181,7 +181,9 @@ class EKF(object):
             elif idx in self.orange_cones_indices:
                 self.orange_cones_indices.remove(idx)
             elif idx in self.orange_big_cones_indices:
-                self.orange_big_cones_indices.remove(idx)   
+                self.orange_big_cones_indices.remove(idx)
+
+        self.logger.info('Post Processing executed')   
     
     def calculate_distance(self, v, dt):
         self.distance += v*dt
@@ -310,7 +312,7 @@ class EKF(object):
 
         final_time = time.time()
         dt = final_time - init_time
-        self.logger.info(f"Measurement update took {dt:.4f}")
+        #self.logger.info(f"Measurement update took {dt:.4f}")
 
         ### ADD NEW CONES ###
         if lap < 1:
