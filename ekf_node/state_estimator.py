@@ -7,8 +7,9 @@ from lart_msgs.msg import Dynamics, ConeArray, Cone, SlamStats, Mission
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import UInt16
 import csv
-
-from geometry_msgs.msg import Vector3Stamped, PoseStamped
+from tf2_ros import TransformBroadcaster
+import tf_transformations
+from geometry_msgs.msg import Vector3Stamped, PoseStamped, TransformStamped
 import matplotlib.pyplot as plt
 
 plt.ion()  # Enable interactive mode
@@ -47,7 +48,7 @@ class StateEstimator(Node):
         self.tire_perimeter = 2.0 * lart_pi * tire_radius 
         self.transmission_ratio = 4.0  
         self.previous_yaw = 0.0
-        self.min_lap_dist = 15.0
+        self.min_lap_dist = 10.0
 
         ### LAP COUNTER VARIABLES ###
         self.lap_count = -1 # Laps
@@ -94,7 +95,6 @@ class StateEstimator(Node):
         mission_topic = self.get_parameter('mission_topic').get_parameter_value().string_value
         self.mission_sub = self.create_subscription(Mission, mission_topic, self.mission_callback, 10)
 
-
         ### PUBLISHER ###
 
         # Create publisher
@@ -113,6 +113,9 @@ class StateEstimator(Node):
         stats_topic = self.get_parameter('stats_topic').get_parameter_value().string_value
         self.slam_stats_pub = self.create_publisher(SlamStats, stats_topic, 10)
 
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+
         
         ### AUX VARIABLES ###
         self.last_rpm = 0.0  # Initialize last rpm to zero
@@ -122,13 +125,41 @@ class StateEstimator(Node):
 
         self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
         self.slam_stats_timer = self.create_timer(0.02, self.publish_slam_stats)  # Timer to publish slam stats at 50Hz
+        self.timer = self.create_timer(0.1, self.broadcast_pose) # broadcast the pose at 10Hz
+
+    def broadcast_pose(self):
+        if self.ekf is None:
+            return
+        x = float(self.ekf.state[0, 0])
+        y = float(self.ekf.state[1, 0])
+        z = 0.0
+        yaw = float(self.ekf.state[2, 0])
+        quat = tf_transformations.quaternion_from_euler(0.0, 0.0, yaw)
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'world'            # Global frame
+        t.child_frame_id = 'base_footprint'         # Robot's frame
+
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = z
+
+        t.transform.rotation.x = float(quat[0])
+        t.transform.rotation.y = float(quat[1])
+        t.transform.rotation.z = float(quat[2])
+        t.transform.rotation.w = float(quat[3])
+
+        self.get_logger().info(f'Broadcasting transform: {t}')
+        self.tf_broadcaster.sendTransform(t)
 
     def mission_callback(self, msg):
         self.mission = msg.data
+        self.get_logger().info(f'Mission set to: {self.mission}')
 
 
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
+
         self.angular_velocity = imu_msg.vector.z 
     
 
@@ -154,36 +185,37 @@ class StateEstimator(Node):
         # Call the predict method of the EKF
         self.ekf.predict(ms_speed, omega_z)
 
-        
-        # Update trajectory
-        x_vals.append(float(self.ekf.state[0]))
-        y_vals.append(float(self.ekf.state[1]))
+        #
 
-        # Get cone positions from the map
-        map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
-        map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
-        map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
-        map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
+        # # Update trajectory
+        # x_vals.append(float(self.ekf.state[0]))
+        # y_vals.append(float(self.ekf.state[1]))
 
-        # Update cone data
-        if map_blue_cones:
-            bc.set_data([cone[1] for cone in map_blue_cones], [cone[0] for cone in map_blue_cones])
-        if map_yellow_cones:
-            yc.set_data([cone[1] for cone in map_yellow_cones], [cone[0] for cone in map_yellow_cones])
-        if map_orange_cones:
-            oc.set_data([cone[1] for cone in map_orange_cones], [cone[0] for cone in map_orange_cones])
-        if map_orange_big_cones:
-            obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
+        # # Get cone positions from the map
+        # map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
+        # map_yellow_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.yellow_cones_indices)
+        # map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
+        # map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
 
-        # Update trajectory plot
-        sc.set_data(y_vals, x_vals)
-        line.set_data(y_vals, x_vals)
+        # # Update cone data
+        # if map_blue_cones:
+        #     bc.set_data([cone[1] for cone in map_blue_cones], [cone[0] for cone in map_blue_cones])
+        # if map_yellow_cones:
+        #     yc.set_data([cone[1] for cone in map_yellow_cones], [cone[0] for cone in map_yellow_cones])
+        # if map_orange_cones:
+        #     oc.set_data([cone[1] for cone in map_orange_cones], [cone[0] for cone in map_orange_cones])
+        # if map_orange_big_cones:
+        #     obc.set_data([cone[1] for cone in map_orange_big_cones], [cone[0] for cone in map_orange_big_cones])
 
-        # Refresh plot
-        ax.relim()
-        ax.autoscale_view()
-        plt.draw()
-        plt.pause(0.001)
+        # # Update trajectory plot
+        # sc.set_data(y_vals, x_vals)
+        # line.set_data(y_vals, x_vals)
+
+        # # Refresh plot
+        # ax.relim()
+        # ax.autoscale_view()
+        # plt.draw()
+        # plt.pause(0.001)
         
 
         # Publish the new state
@@ -192,10 +224,12 @@ class StateEstimator(Node):
         # Verify if a lap was completed
         self.verify_lap()
 
+
+
     def update_callback(self, obs_msg):
         if self.ekf is None:
             self.intialize_ekf()
-            self.get_logger().info('Iniciei ekf no update')
+            # self.get_logger().info('Iniciei ekf no update')
             return
         self.ekf.update(obs_msg, self.lap_count)
         # publish the new state
@@ -229,10 +263,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 1 # Yellow cone
             cone_array_msg.cones.append(cone_aux)
-            '''
+            
             marker = self.create_marker(cone, 1) 
             marker_array_msg.markers.append(marker)
-            '''
+            
 
 
         map_blue_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.blue_cones_indices)
@@ -242,10 +276,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 2 # Blue cone
             cone_array_msg.cones.append(cone_aux)
-            '''
+            
             marker = self.create_marker(cone, 2)  # Create marker for blue cone
             marker_array_msg.markers.append(marker)
-            '''
+            
         
         map_orange_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_cones_indices)
         for cone in map_orange_cones:
@@ -254,10 +288,10 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 3 # Orange cone
             cone_array_msg.cones.append(cone_aux)
-            '''
+            
             marker = self.create_marker(cone, 3) 
             marker_array_msg.markers.append(marker)
-            '''
+            
 
         map_orange_big_cones = self.ekf.get_cones_from_map(self.ekf.state, self.ekf.orange_big_cones_indices)
         for cone in map_orange_big_cones:
@@ -266,17 +300,17 @@ class StateEstimator(Node):
             cone_aux.position.y = cone[1]
             cone_aux.class_type.data = 4 # Orange Big cone
             cone_array_msg.cones.append(cone_aux)
-            '''
+            
             marker = self.create_marker(cone, 4) 
             marker_array_msg.markers.append(marker)
-            '''
+            
 
         # Publish the ConeArray message
         self.map_pub.publish(cone_array_msg)
-        '''
+        
         # Publish the MarkerArray message
         self.markers_pub.publish(marker_array_msg)
-        '''
+        
 
     def publish_slam_stats(self):
         if self.ekf is None:
@@ -337,7 +371,7 @@ class StateEstimator(Node):
             if self.lap_count == 1:
                 self.ekf.post_processing()
                 
-            self.get_logger().info(f'lap={self.lap_count} new distance={self.distance_after_lap}')
+            self.get_logger().info(f'lap={self.lap_count}, lap distance={self.distance_after_lap}')
 
 
 
@@ -394,6 +428,8 @@ class StateEstimator(Node):
             return
         elif self.mission == Mission.TRACKDRIVE or self.mission == Mission.AUTOCROSS:
             initial_state = np.array([[-6.0], [0.0], [0.0]])
+        elif self.mission == Mission.SKIDPAD:
+            initial_state = np.array([[-20.0], [0.0], [0.0]])
         else:
             initial_state = np.array([[0.0], [0.0], [0.0]])
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
