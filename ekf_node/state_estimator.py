@@ -125,11 +125,29 @@ class StateEstimator(Node):
 
         self.map_timer = self.create_timer(0.02, self.map_publish)  # Timer to publish map at 50Hz
         self.slam_stats_timer = self.create_timer(0.02, self.publish_slam_stats)  # Timer to publish slam stats at 50Hz
-        self.timer = self.create_timer(0.1, self.broadcast_pose) # broadcast the pose at 10Hz
+        # self.timer = self.create_timer(0.2, self.broadcast_pose) # broadcast the pose at 10Hz
 
     def broadcast_pose(self):
         if self.ekf is None:
+            t = TransformStamped()
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = 'world'            # Global frame
+            t.child_frame_id = 'base_footprint'         # Robot's frame
+
+            t.transform.translation.x = 0.0
+            t.transform.translation.y = 0.0
+            t.transform.translation.z = 0.0
+            quat = tf_transformations.quaternion_from_euler(0.0, 0.0, 0.0)
+
+            t.transform.rotation.x = float(quat[0])
+            t.transform.rotation.y = float(quat[1])
+            t.transform.rotation.z = float(quat[2])
+            t.transform.rotation.w = float(quat[3])
+
+            self.get_logger().info(f'Broadcasting transform: {t}')
+            self.tf_broadcaster.sendTransform(t)
             return
+        
         x = float(self.ekf.state[0, 0])
         y = float(self.ekf.state[1, 0])
         z = 0.0
@@ -377,7 +395,7 @@ class StateEstimator(Node):
 
     def create_marker(self, cone, cone_type):
         marker = Marker()
-        marker.header.frame_id = 'base_footprint'
+        marker.header.frame_id = 'world'
         marker.id = self.count_marker
         self.count_marker += 1
         marker.type = Marker.CYLINDER
