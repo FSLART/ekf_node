@@ -62,8 +62,8 @@ class StateEstimator(Node):
         self.last_rpm = 0.0 # Initialize a safety measure for the speed
 
         ### MISSION VARIABLES ###
-        #self.mission = Mission.MANUAL #Consider Manual a the default mission
-        self.mission = Mission.TRACKDRIVE #FOR TESTING
+        self.mission = Mission.MANUAL #Consider Manual a the default mission
+        #self.mission = Mission.ACCELERATION #FOR TESTING
 
 
         ### DECLARING PARAMETERS ###
@@ -75,7 +75,7 @@ class StateEstimator(Node):
         self.declare_parameter('map_topic','/ekf/map')
         self.declare_parameter('markers_topic','/ekf/cone_markers')
         self.declare_parameter('stats_topic', '/ekf/stats')
-        self.declare_parameter('mission_topic','/pc_origin/system_status/critical_as/mission')
+        self.declare_parameter('mission_topic','/acu_origin/system_status/critical_as/mission')
 
         ### SUBSCRIPTIONS ###
 
@@ -177,22 +177,17 @@ class StateEstimator(Node):
 
     def imu_callback(self, imu_msg):
         # Save the previous angular velocity
-
         self.angular_velocity = imu_msg.vector.z 
+        self.get_logger().info(f'I got the following angular velocity: {self.angular_velocity}')
     
 
     def predict_callback(self, v_msg):
         if self.ekf is None:
+            self.get_logger().info('EKF not initialized, initializing now...')
             self.intialize_ekf()
-            return
 
-        rpm = 0
-
-        if v_msg.rpm > 2000:
-            rpm = self.last_rpm  # If the rpm is too high, use the last known rpm
-        else:
-            self.last_rpm = rpm
-            rpm = v_msg.rpm
+        rpm = v_msg.rpm
+        self.get_logger().info(f'Got the following rpm: {rpm}')
 
         # Convert the rpm's to m/s
         ms_speed = self.tire_perimeter * (rpm / self.transmission_ratio / 60.0)
@@ -203,7 +198,8 @@ class StateEstimator(Node):
         # Call the predict method of the EKF
         self.ekf.predict(ms_speed, omega_z)
 
-        #
+
+        #-----------------------------------------#
 
         # # Update trajectory
         # x_vals.append(float(self.ekf.state[0]))
@@ -234,7 +230,8 @@ class StateEstimator(Node):
         # ax.autoscale_view()
         # plt.draw()
         # plt.pause(0.001)
-        
+
+        #-----------------------------------------#
 
         # Publish the new state
         self.position_publish()
@@ -246,9 +243,8 @@ class StateEstimator(Node):
 
     def update_callback(self, obs_msg):
         if self.ekf is None:
+            self.get_logger().info('EKF not initialized, initializing now...')
             self.intialize_ekf()
-            # self.get_logger().info('Iniciei ekf no update')
-            return
         self.ekf.update(obs_msg, self.lap_count)
         # publish the new state
         self.position_publish()
@@ -369,7 +365,7 @@ class StateEstimator(Node):
 
         #Aceleration Lap
         if self.mission == Mission.ACCELERATION:
-            if np.abs(position_x - 75.0) < self.margin_x:
+            if np.abs(position_x - 75.0) < self.margin_x: #DONT FORGET TO CHANGE TO 75
                 lap_complete = True
         #SkidPad lap
         if self.mission == Mission.SKIDPAD:
@@ -448,6 +444,8 @@ class StateEstimator(Node):
             initial_state = np.array([[-6.0], [0.0], [0.0]])
         elif self.mission == Mission.SKIDPAD:
             initial_state = np.array([[-20.0], [0.0], [0.0]])
+        elif self.mission == Mission.ACCELERATION:
+            initial_state = np.array([[0.0], [0.0], [0.0]])  # Add acceleration case
         else:
             initial_state = np.array([[0.0], [0.0], [0.0]])
         process_noise = np.diag([0.002, 0.002,0.0005]).astype(np.float64)
