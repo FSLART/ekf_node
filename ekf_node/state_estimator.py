@@ -63,6 +63,7 @@ class StateEstimator(Node):
 
         ### MISSION VARIABLES ###
         self.mission = Mission.MANUAL #Consider Manual a the default mission
+        self.mission_set = False
         #self.mission = Mission.ACCELERATION #FOR TESTING
 
 
@@ -171,8 +172,10 @@ class StateEstimator(Node):
         self.tf_broadcaster.sendTransform(t)
 
     def mission_callback(self, msg):
-        self.mission = msg.data
-        self.get_logger().info(f'Mission set to: {self.mission}')
+        if not self.mission_set:
+            self.mission = msg.data
+            self.mission_set = True
+            self.get_logger().info(f'Mission set to: {self.mission}')
 
 
     def imu_callback(self, imu_msg):
@@ -242,14 +245,15 @@ class StateEstimator(Node):
 
 
     def update_callback(self, obs_msg):
-        if self.ekf is None:
-            self.get_logger().info('EKF not initialized, initializing now...')
-            self.intialize_ekf()
-        self.ekf.update(obs_msg, self.lap_count)
+        # if self.ekf is None:
+        #     self.get_logger().info('EKF not initialized, initializing now...')
+        #     self.intialize_ekf()
+        # self.ekf.update(obs_msg, self.lap_count)
         # publish the new state
-        self.position_publish()
+        # self.position_publish()
         # Verify if a lap was completed
-        self.verify_lap()
+        # self.verify_lap()
+        pass
         
 
     def position_publish(self):
@@ -365,7 +369,7 @@ class StateEstimator(Node):
 
         #Aceleration Lap
         if self.mission == Mission.ACCELERATION:
-            if np.abs(position_x - 75.0) < self.margin_x: #DONT FORGET TO CHANGE TO 75
+            if np.abs(position_x - 75.0) < self.margin_x or position_x >75.0: #DONT FORGET TO CHANGE TO 75
                 lap_complete = True
         #SkidPad lap
         if self.mission == Mission.SKIDPAD:
