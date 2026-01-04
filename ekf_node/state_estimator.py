@@ -132,7 +132,7 @@ class StateEstimator(Node):
         if self.ekf is None:
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
-            t.header.frame_id = 'world'            # Global frame
+            t.header.frame_id = 'map'            # Global frame
             t.child_frame_id = 'base_footprint'         # Robot's frame
 
             t.transform.translation.x = 0.0
@@ -156,7 +156,7 @@ class StateEstimator(Node):
         quat = tf_transformations.quaternion_from_euler(0.0, 0.0, yaw)
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'world'            # Global frame
+        t.header.frame_id = 'map'            # Global frame
         t.child_frame_id = 'base_footprint'         # Robot's frame
 
         t.transform.translation.x = x
